@@ -24,11 +24,13 @@ from typing import Any, Callable, Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
 import numpy as np
+import tiktoken
 from sklearn.cluster import DBSCAN
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.core.context_budget import ContextBudget, ModelCapacity
 from agent_service.core.db.engine import get_database_engine
 from agent_service.models.knowledge_graph import (
     KnowledgeGraphDocumentStatus,
@@ -160,7 +162,7 @@ class LLMKnowledgeGraphExtractor:
                 HumanMessage(content=self._human_prompt(
                     document=document,
                     section=section,
-                    content=content[:self.config.limits.graph_single_section_max_chars],
+                    content=content,
                 )),
             ],
             model_name=self._value("model_name"),
@@ -169,6 +171,8 @@ class LLMKnowledgeGraphExtractor:
             small_model_name=self._value("small_model_name"),
             small_api_key=self._value("small_api_key"),
             small_base_url=self._value("small_base_url"),
+            context_window_tokens=self._capacity_value("small_model_context_window_tokens"),
+            max_output_tokens=self._capacity_value("small_model_max_output_tokens"),
         )
         self._record_token_usage(response=response, document=document, section=section)
         return self._parse_json_object(str(response.content or ""))
@@ -206,6 +210,8 @@ class LLMKnowledgeGraphExtractor:
             small_model_name=self._value("small_model_name"),
             small_api_key=self._value("small_api_key"),
             small_base_url=self._value("small_base_url"),
+            context_window_tokens=self._capacity_value("small_model_context_window_tokens"),
+            max_output_tokens=self._capacity_value("small_model_max_output_tokens"),
         )
         self._record_token_usage(response=response, document=document, section=non_empty_sections[0])
         payload = self._parse_json_object(str(response.content or ""))
@@ -294,6 +300,28 @@ class LLMKnowledgeGraphExtractor:
         value = self.llm_config.get(key)
         return str(value).strip() if value else None
 
+    def _capacity_value(self, key: str) -> int | None:
+        """读取用户为图谱小模型保存的正整数能力覆盖。"""
+
+        try:
+            value = int(self.llm_config.get(key) or 0)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    def context_budget(self) -> ContextBudget:
+        """返回当前图谱小模型用于章节切块的动态预算。"""
+
+        model_name = self._value("small_model_name") or self._value("model_name") or self.config.model.local_model_name
+        capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=model_name,
+            model_tier=SMALL_MODEL_TIER,
+            context_window_tokens=self._capacity_value("small_model_context_window_tokens"),
+            max_output_tokens=self._capacity_value("small_model_max_output_tokens"),
+        )
+        return ContextBudget.from_config(config=self.config, capacity=capacity)
+
     def deduplicate_entities(
         self,
         entities: list[EntityCandidate],
@@ -316,6 +344,8 @@ class LLMKnowledgeGraphExtractor:
             small_model_name=self._value("small_model_name"),
             small_api_key=self._value("small_api_key"),
             small_base_url=self._value("small_base_url"),
+            context_window_tokens=self._capacity_value("small_model_context_window_tokens"),
+            max_output_tokens=self._capacity_value("small_model_max_output_tokens"),
         )
         self._record_dedup_token_usage(response=response, document=document)
         payload = self._parse_json_object(str(response.content or ""))
@@ -430,6 +460,8 @@ class LLMKnowledgeGraphExtractor:
             small_model_name=self._value("small_model_name"),
             small_api_key=self._value("small_api_key"),
             small_base_url=self._value("small_base_url"),
+            context_window_tokens=self._capacity_value("small_model_context_window_tokens"),
+            max_output_tokens=self._capacity_value("small_model_max_output_tokens"),
         )
         self._record_dedup_token_usage(response=response, document=document)
         payload = self._parse_json_object(str(response.content or ""))
@@ -636,8 +668,24 @@ def _extract_graph_section_payloads(
     """并发抽取章节批次，并以单调完成计数报告前端进度。"""
 
     limits = getattr(getattr(extractor, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
+    if hasattr(extractor, "context_budget"):
+        section_token_limit = extractor.context_budget().max_single_block_tokens
+        section_model_name = extractor._value("small_model_name") or extractor._value("model_name")
+    else:
+        section_token_limit = limits.graph_batch_max_chars
+        section_model_name = None
+    expanded_sections: list[StructuredKnowledgeSection] = []
+    original_section_by_chunk: dict[str, str] = {}
+    for section in document.sections:
+        chunks = _split_graph_section_by_tokens(
+            section,
+            token_limit=section_token_limit,
+            model_name=section_model_name,
+        )
+        expanded_sections.extend(chunks)
+        original_section_by_chunk.update({chunk.section_id: section.section_id for chunk in chunks})
     batches = _batch_graph_sections(
-        document.sections,
+        expanded_sections,
         max_chars=limits.graph_batch_max_chars,
         max_sections=limits.graph_batch_max_sections,
     )
@@ -658,11 +706,48 @@ def _extract_graph_section_payloads(
                     pending.cancel()
                 raise GraphExtractionCancelled("图谱抽取已取消")
             batch = futures[future]
-            payloads.update(future.result())
+            for chunk_id, chunk_payload in future.result().items():
+                original_id = original_section_by_chunk.get(chunk_id, chunk_id)
+                aggregate = payloads.setdefault(original_id, {"entities": [], "relations": []})
+                aggregate["entities"].extend(chunk_payload.get("entities", []))
+                aggregate["relations"].extend(chunk_payload.get("relations", []))
             completed_sections += len(batch)
             completed_batches += 1
-            on_progress(completed_sections, len(document.sections), completed_batches, len(batches))
+            on_progress(completed_sections, len(expanded_sections), completed_batches, len(batches))
     return payloads
+
+
+def _split_graph_section_by_tokens(
+    section: StructuredKnowledgeSection,
+    *,
+    token_limit: int,
+    model_name: str | None,
+) -> list[StructuredKnowledgeSection]:
+    """按小模型预算完整切分长章节，不静默丢弃任意 token。"""
+
+    try:
+        encoding = tiktoken.encoding_for_model(model_name) if model_name else tiktoken.get_encoding("o200k_base")
+    except KeyError:
+        encoding = tiktoken.get_encoding("o200k_base")
+    tokens = encoding.encode(section.content)
+    safe_limit = max(int(token_limit), 1)
+    if len(tokens) <= safe_limit:
+        return [section]
+    chunks: list[StructuredKnowledgeSection] = []
+    char_offset = section.start_char
+    for index, start in enumerate(range(0, len(tokens), safe_limit)):
+        content = encoding.decode(tokens[start:start + safe_limit])
+        chunk_start = char_offset
+        char_offset += len(content)
+        chunks.append(StructuredKnowledgeSection(
+            section_id=f"{section.section_id}::chunk:{index}",
+            heading=section.heading,
+            title_path=list(section.title_path),
+            content=content,
+            start_char=chunk_start,
+            end_char=char_offset,
+        ))
+    return chunks
 
 
 def get_graph_extraction_progress(user_id: str, library_id: str) -> dict[str, Any]:
@@ -739,7 +824,7 @@ def _set_dedup_progress(
 def _build_llm_config(
     config: AgentConfig,
     user_llm_config: dict[str, Any] | None = None,
-) -> dict[str, str | None]:
+) -> dict[str, Any]:
     """从 config 构造抽取器可用的 llm_config 字典。
 
     优先级: user_llm_config（用户设置页）> AgentConfig（env/默认值）。
@@ -755,11 +840,17 @@ def _build_llm_config(
         "small_model_name": None,
         "small_api_key": None,
         "small_base_url": None,
+        "small_model_context_window_tokens": 0,
+        "small_model_max_output_tokens": 0,
+        "model_context_window_tokens": 0,
+        "model_max_output_tokens": 0,
     }
     if has_user_config:
         for key in base:
             val = source.get(key)
-            if val and isinstance(val, str) and val.strip():
+            if key.endswith("_tokens"):
+                base[key] = int(val or 0)
+            elif val and isinstance(val, str) and val.strip():
                 base[key] = val.strip()
     else:
         base = {
@@ -769,6 +860,10 @@ def _build_llm_config(
             "small_model_name": config.model.small_model_name.strip() or None,
             "small_api_key": config.model.small_model_api_key.strip() or None,
             "small_base_url": config.model.small_model_base_url.strip() or None,
+            "small_model_context_window_tokens": config.model.small_model_context_window_tokens,
+            "small_model_max_output_tokens": config.model.small_model_max_output_tokens,
+            "model_context_window_tokens": config.model.model_context_window_tokens,
+            "model_max_output_tokens": config.model.model_max_output_tokens,
         }
 
     small_model_name = base.get("small_model_name")
@@ -786,6 +881,14 @@ def _build_llm_config(
         "small_model_name": small_model_name,
         "small_api_key": small_key,
         "small_base_url": small_url,
+        "small_model_context_window_tokens": (
+            base.get("small_model_context_window_tokens", 0)
+            or base.get("model_context_window_tokens", 0)
+        ),
+        "small_model_max_output_tokens": (
+            base.get("small_model_max_output_tokens", 0)
+            or base.get("model_max_output_tokens", 0)
+        ),
     }
 
 

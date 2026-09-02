@@ -103,11 +103,15 @@ class UserLLMConfig(SQLModel, table=True):
     api_key: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     base_url: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     model_name: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
+    model_context_window_tokens: int = Field(default=0, ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    model_max_output_tokens: int = Field(default=0, ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
 
     # 小模型
     small_api_key: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     small_base_url: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     small_model_name: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
+    small_model_context_window_tokens: int = Field(default=0, ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    small_model_max_output_tokens: int = Field(default=0, ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
 
     updated_at: datetime = Field(default_factory=utc_now)
 

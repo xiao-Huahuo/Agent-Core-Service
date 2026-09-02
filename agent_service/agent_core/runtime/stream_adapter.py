@@ -298,6 +298,13 @@ class StreamAdapterMixin:
         content = StreamAdapterMixin._drop_unmapped_citation_anchors(content, citation_map)
         content = StreamAdapterMixin._insert_missing_citation_anchors_inline(content, citation_map)
         metadata = StreamAdapterMixin._build_citation_metadata(content, citation_map)
+        stream_diagnostics = (
+            getattr(last_message, "additional_kwargs", {}).get("stream_diagnostics")
+            if last_message is not None
+            else None
+        )
+        if isinstance(stream_diagnostics, dict):
+            metadata["stream_diagnostics"] = stream_diagnostics
         return {
             "node": node_name,
             "content": content,

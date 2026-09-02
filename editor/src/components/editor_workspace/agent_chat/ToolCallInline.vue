@@ -602,7 +602,7 @@ function finalizedPatch(entry: ToolDisplayEntry) {
       :inert="!expanded.has(entry.key)"
     >
       <div class="tool-result-collapse-inner">
-      <div class="tool-result-content is-expandable">
+      <div v-if="expanded.has(entry.key)" class="tool-result-content is-expandable">
         <div v-if="finalizedPatch(entry)" class="patch-preview" aria-label="局部代码修改">
           <span v-if="finalizedPatch(entry)?.path" class="patch-path">{{ finalizedPatch(entry)?.path }}</span>
           <ChangeDiff :before="finalizedPatch(entry)!.before" :after="finalizedPatch(entry)!.after" :show-line-numbers="finalizedPatch(entry)!.complete" />

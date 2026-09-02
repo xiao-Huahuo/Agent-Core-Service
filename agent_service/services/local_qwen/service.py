@@ -45,7 +45,6 @@ _QWEN_PARAMETER_PATTERN = re.compile(
 )
 _TOOL_CALL_OPEN = "<tool_call>"
 # CPU 推理仅保留云端系统提示的关键首尾，避免长操作手册阻塞首 token。
-_LOCAL_SYSTEM_CONTEXT_CHARS = 800
 
 
 def parse_qwen_response(text: str) -> AIMessage:
@@ -178,7 +177,14 @@ class LocalQwenService:
             max_new_tokens=max_new_tokens or self.config.model.local_model_max_new_tokens,
         )
 
-    def understand_image(self, *, image_path: Path, ocr_text: str, prompt: str = "") -> str:
+    def understand_image(
+        self,
+        *,
+        image_path: Path,
+        ocr_text: str,
+        prompt: str = "",
+        content_ref: str = "",
+    ) -> str:
         """结合原图与先行 OCR 文本生成视觉语义描述。"""
 
         from PIL import Image
@@ -187,10 +193,27 @@ class LocalQwenService:
             "请描述图片中的对象、布局、空间关系、图表趋势和 OCR 无法表达的视觉含义。"
             "不要重复抄写 OCR 文本，不确定的内容明确说明。"
         )
-        ocr_context = (
-            ocr_text.strip()[:self.config.limits.local_vision_ocr_context_chars]
-            or "（OCR 未识别到可靠文字）"
+        from agent_service.core.context_budget import ContextBudget, ModelCapacity
+        from agent_service.services.memory.context_builder import ContextBuilder
+
+        capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=self.config.model.local_model_name,
+            model_tier="large",
+            context_window_tokens=self.config.model.model_context_window_tokens or None,
+            max_output_tokens=self.config.model.local_model_vision_max_new_tokens,
         )
+        budget = ContextBudget.from_config(config=self.config, capacity=capacity)
+        prompt_tokens = ContextBuilder.estimate_text_tokens(
+            normalized_prompt,
+            model_name=capacity.model_name,
+        )
+        ocr_context = ContextBuilder._head_tail_text(
+            ocr_text.strip(),
+            token_budget=max(budget.input_budget_tokens - prompt_tokens, 1),
+            model_name=capacity.model_name,
+            reference=content_ref or f"attachment-ocr://{image_path.name}",
+        ) or "（OCR 未识别到可靠文字）"
         with Image.open(image_path) as source:
             image = source.convert("RGB")
             messages = [{
@@ -358,13 +381,6 @@ class LocalQwenService:
             serialized.append(item)
         if system_parts:
             system_content = "\n\n".join(system_parts)
-            if len(system_content) > _LOCAL_SYSTEM_CONTEXT_CHARS:
-                half = _LOCAL_SYSTEM_CONTEXT_CHARS // 2
-                system_content = (
-                    system_content[:half]
-                    + "\n\n[本地上下文已压缩]\n\n"
-                    + system_content[-half:]
-                )
             serialized.insert(0, {
                 "role": "system",
                 "content": [{"type": "text", "text": system_content}],

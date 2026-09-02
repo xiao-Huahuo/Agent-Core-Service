@@ -6,14 +6,16 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-import { streamPrompt } from '@/api/agent'
+import { claimChildAgentWakeup, streamPrompt } from '@/api/agent'
 
 const mocks = vi.hoisted(() => ({
-  streamLines: vi.fn(() => (async function* () {})()),
+  apiPost: vi.fn(),
+  streamLines: vi.fn((_url: string, _init: RequestInit) => (async function* () {})()),
 }))
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/api/client')>(),
+  apiPost: mocks.apiPost,
   buildApiUrl: (path: string) => path,
   streamLines: mocks.streamLines,
 }))
@@ -33,5 +35,14 @@ describe('Agent stream API client', () => {
     expect(JSON.parse(String(request.body))).toMatchObject({
       message_metadata: { wakeup: true, child_agent_event: childAgentEvent },
     })
+  })
+
+  it('posts the child identity before issuing an automatic wakeup', () => {
+    claimChildAgentWakeup('child/1', 'user-1', 'session-1')
+
+    expect(mocks.apiPost).toHaveBeenCalledWith(
+      '/agent/children/child%2F1/claim-wakeup',
+      { user_id: 'user-1', session_id: 'session-1' },
+    )
   })
 })

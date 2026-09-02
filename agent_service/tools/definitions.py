@@ -48,12 +48,14 @@ from agent_service.tools.builtin import (
     get_knowledge_file_url,
     get_long_term_memory,
     list_available_tools,
+    read_tool_result,
     list_library_items,
     list_library_tags,
     list_skills,
     list_knowledge_files,
     list_todos,
     read_knowledge_file,
+    read_session_attachment,
     patch_knowledge_file,
     remove_library_item,
     rename_knowledge_file,
@@ -89,6 +91,25 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=list_available_tools,
         display_name="查看可用工具",
+    ),
+    BuiltinToolDefinition(
+        name="read_tool_result",
+        description=(
+            "按 tool-result:// 引用继续读取当前会话中已经执行过的完整工具结果。"
+            "支持 start_line/end_line 或 cursor；不要为查看被省略内容而重新执行原工具。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "content_ref": {"type": "string", "description": "工具结果返回的 tool-result:// 引用。"},
+                "start_line": {"type": "integer", "description": "可选起始行，0-based。"},
+                "end_line": {"type": "integer", "description": "可选结束行，不包含该行。"},
+                "cursor": {"type": "integer", "description": "可选 continuation cursor。"},
+            },
+            "required": ["content_ref"],
+        },
+        function=read_tool_result,
+        display_name="继续读取工具结果",
     ),
     BuiltinToolDefinition(
         name="run_terminal_command",
@@ -409,6 +430,25 @@ MEMORY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 MEMORY_TOOL_NAMES = frozenset(definition.name for definition in MEMORY_TOOL_DEFINITIONS)
 
 KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="read_session_attachment",
+        description=(
+            "按 attachment:// 引用读取当前会话上传附件的完整解析正文。"
+            "支持 start_line/end_line 或 continuation cursor。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "content_ref": {"type": "string", "description": "附件目录返回的 attachment:// 引用。"},
+                "start_line": {"type": "integer"},
+                "end_line": {"type": "integer"},
+                "cursor": {"type": "integer"},
+            },
+            "required": ["content_ref"],
+        },
+        function=read_session_attachment,
+        display_name="继续读取附件",
+    ),
     BuiltinToolDefinition(
         name="get_knowledge_context",
         description=(

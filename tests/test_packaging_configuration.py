@@ -89,6 +89,16 @@ def test_backend_direct_runtime_dependencies_are_declared() -> None:
     assert {"numpy", "pyyaml", "xlrd", "fpdf2"} <= declared
 
 
+def test_deepseek_stream_adapter_dependencies_are_version_locked() -> None:
+    """DeepSeek reasoning 适配依赖必须锁版本，避免第三方字段转换静默漂移。"""
+
+    requirements = (PROJECT_ROOT / "agent_service" / "requirements.txt").read_text(encoding="utf-8")
+
+    assert "langchain-core==1.3.3" in requirements
+    assert "langchain-openai==1.2.1" in requirements
+    assert "openai==2.36.0" in requirements
+
+
 def test_safety_service_uses_and_reloads_project_sensitive_words(tmp_path: Path) -> None:
     """安装版安全审核必须读取用户项目目录中的可持久化词库。"""
 

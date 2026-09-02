@@ -240,6 +240,10 @@ class SettingsGrpcHandlerMixin:
                 small_api_key=request.small_api_key,
                 small_base_url=request.small_base_url,
                 small_model_name=request.small_model_name,
+                model_context_window_tokens=request.model_context_window_tokens,
+                model_max_output_tokens=request.model_max_output_tokens,
+                small_model_context_window_tokens=request.small_model_context_window_tokens,
+                small_model_max_output_tokens=request.small_model_max_output_tokens,
             )
         except ValueError as exc:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))

@@ -5,7 +5,13 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchAgentAttachment, streamPrompt, updateCurrentDocumentContext, uploadAgentAttachment } from '../agent'
+import {
+  fetchAgentAttachment,
+  fetchChildAgentDshWeb,
+  streamPrompt,
+  updateCurrentDocumentContext,
+  uploadAgentAttachment,
+} from '../agent'
 
 describe('streamPrompt reference transport', () => {
   afterEach(() => {
@@ -93,6 +99,23 @@ describe('streamPrompt reference transport', () => {
     await fetchAgentAttachment('user/1', 'session 1', 'att-1')
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/agent/attachments/att-1?user_id=user%2F1&session_id=session+1')
+  })
+
+  it('requests the managed DSH Web URL with child and session ownership', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      run_id: 'child/1',
+      url: 'http://127.0.0.1:3080/#readonly=1',
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchChildAgentDshWeb('child/1', 'user/1', 'session 1')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      '/agent/children/child%2F1/dsh-web?user_id=user%2F1&session_id=session+1',
+    )
   })
 
   it('reports native upload progress without blocking on attachment parsing', async () => {

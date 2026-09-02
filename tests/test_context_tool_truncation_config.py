@@ -62,13 +62,13 @@ def test_tool_catalog_description_limit_comes_from_agent_config(tmp_path: Path, 
     assert "abcde" not in result
 
 
-def test_memory_tool_result_limit_comes_from_agent_config(tmp_path: Path) -> None:
+def test_memory_tool_deletion_uses_exact_service_lookup_without_result_truncation(tmp_path: Path) -> None:
     """长期记忆删除回执交给 Agent 的正文预览长度必须可配置。"""
 
-    config = _config(tmp_path, tool_memory_mutation_result_chars=5)
+    config = _config(tmp_path)
     memory = SimpleNamespace(memory_id="m1", content="abcdefghij")
     memory_service = SimpleNamespace(
-        list_user_memories=lambda **_kwargs: [memory],
+        find_user_memory_by_content=lambda **_kwargs: memory,
         delete_memory=lambda **_kwargs: True,
     )
     set_tool_runtime(
@@ -82,13 +82,13 @@ def test_memory_tool_result_limit_comes_from_agent_config(tmp_path: Path) -> Non
     finally:
         clear_tool_runtime()
 
-    assert result == "已删除长期记忆: abcde"
+    assert result == "已删除长期记忆: abcdefghij"
 
 
-def test_local_vision_ocr_context_limit_comes_from_agent_config(tmp_path: Path, monkeypatch) -> None:
+def test_local_vision_ocr_context_is_not_cut_by_fixed_character_limit(tmp_path: Path, monkeypatch) -> None:
     """识图请求拼装的 OCR 文本长度必须读取全局配置。"""
 
-    config = _config(tmp_path, local_vision_ocr_context_chars=6)
+    config = _config(tmp_path)
     service = LocalQwenService(config=config)
     captured: dict[str, object] = {}
 
@@ -104,13 +104,13 @@ def test_local_vision_ocr_context_limit_comes_from_agent_config(tmp_path: Path, 
     messages = captured["messages"]
     text_block = messages[0]["content"][1]["text"]
     assert "abcdef" in text_block
-    assert "abcdefg" not in text_block
+    assert "abcdefghij" in text_block
 
 
-def test_graph_single_section_context_limit_comes_from_agent_config(tmp_path: Path) -> None:
+def test_graph_single_section_context_is_not_cut_by_fixed_character_limit(tmp_path: Path) -> None:
     """单章节图谱抽取发送给模型的正文长度必须读取全局配置。"""
 
-    config = _config(tmp_path, graph_single_section_max_chars=7)
+    config = _config(tmp_path)
     response = MagicMock(content='{"entities": [], "relations": []}')
     scheduler = MagicMock()
     scheduler.invoke_chat.return_value = response
@@ -143,7 +143,7 @@ def test_graph_single_section_context_limit_comes_from_agent_config(tmp_path: Pa
 
     request = scheduler.invoke_chat.call_args.kwargs["messages"][1].content
     assert "abcdefg" in request
-    assert "abcdefgh" not in request
+    assert "abcdefghij" in request
 
 
 def test_attachment_candidate_preview_uses_registered_config_field() -> None:

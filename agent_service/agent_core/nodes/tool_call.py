@@ -22,6 +22,7 @@ from langgraph.prebuilt import ToolNode
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.tools import ToolExecutor
+from agent_service.tools.result_envelope import build_tool_result_envelope
 from agent_service.tools.runtime_context import get_tool_citation_map, get_tool_runtime, get_tool_trace_callback
 
 TASK_LIST_TOOL_NAMES = {"create_task_list", "complete_task_list_item", "finish_task_list"}
@@ -143,6 +144,7 @@ class ToolCallNode:
             before_citations = get_tool_citation_map()
             started_at = time.perf_counter()
             runtime = None
+            failed = False
             try:
                 from agent_service.tools.definitions import MEMORY_TOOL_NAMES
                 from agent_service.tools.runtime_context import get_tool_runtime
@@ -159,6 +161,7 @@ class ToolCallNode:
                     content = self.tool_executor.execute(tool_name, arguments)
             except Exception as exc:
                 content = f"工具 {tool_name} 执行失败: {exc}"
+                failed = True
             if tool_name in TASK_LIST_TOOL_NAMES:
                 task_list_updated = True
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -168,7 +171,18 @@ class ToolCallNode:
                 for key, value in after_citations.items()
                 if key not in before_citations
             }
-            messages.append(ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name))
+            tool_result = build_tool_result_envelope(
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                content=content,
+                failed=failed,
+            ).to_dict()
+            messages.append(ToolMessage(
+                content=content,
+                tool_call_id=tool_call_id,
+                name=tool_name,
+                additional_kwargs={"tool_result": tool_result},
+            ))
             result_count = self._count_results(content)
             completion_text = (
                 f"工具「{display_name}」已完成，共 {result_count} 条结果。"
@@ -184,6 +198,7 @@ class ToolCallNode:
                 "tool_args_summary": args_summary,
                 "tool_args": arguments,
                 "raw_content": content,
+                "tool_result": tool_result,
                 "duration_ms": duration_ms,
                 "human_readable": completion_text,
                 "result_count": result_count,

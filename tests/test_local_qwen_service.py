@@ -66,10 +66,10 @@ def test_local_qwen_compacts_long_system_context_for_cpu_prefill() -> None:
     ])
     system_text = serialized[0]["content"][0]["text"]
 
-    assert len(system_text) < 1000
+    assert len(system_text) == 2402
     assert system_text.startswith("开")
     assert system_text.endswith("结")
-    assert "本地上下文已压缩" in system_text
+    assert "本地上下文已压缩" not in system_text
 
 
 def test_local_qwen_runtime_dependencies_stay_cpu_compatible() -> None:

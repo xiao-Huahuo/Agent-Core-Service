@@ -23,6 +23,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent_service.core.agent_config import AgentConfig
+from agent_service.core.context_budget import capacity_overrides_from_mapping
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate, LongTermMemorySpecOut
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService
@@ -76,6 +77,10 @@ class ImportantFactSummaryService:
         api_key, base_url, model_name, small_api_key, small_base_url, small_model_name = (
             self._resolve_llm_overrides(llm_config)
         )
+        context_window_tokens, max_output_tokens = capacity_overrides_from_mapping(
+            llm_config,
+            model_tier=SMALL_MODEL_TIER,
+        )
         response = self.task_scheduler.invoke_chat(
             task_type=task_type,
             model_tier=SMALL_MODEL_TIER,
@@ -85,6 +90,8 @@ class ImportantFactSummaryService:
             small_api_key=small_api_key,
             small_base_url=small_base_url,
             small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
             messages=[
                 SystemMessage(content=self._build_system_prompt(mode=mode)),
                 HumanMessage(content=normalized_transcript),

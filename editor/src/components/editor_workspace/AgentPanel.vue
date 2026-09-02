@@ -46,7 +46,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode, ChildAgentRecord } from '@/api/agent'
 import { fetchSessionState, type SessionRecord } from '@/api/session'
 import { fetchAgentAttachment, uploadAgentAttachment } from '@/api/agent'
-import { fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
+import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS, fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
 
 type MessageListApi = {
@@ -104,7 +104,12 @@ const sessionLoading = ref(false)
 let taskHistoryPollTimer: number | null = null
 const loadingSessionId = ref('')
 const remoteSessionPending = ref('')
-const contextWindowTokens = ref(1000000)
+const contextWindowTokens = ref(DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS)
+const displayedMaxContextTokens = computed(() => (
+  chatStore.value.contextUsage?.capacity_source === 'conservative_fallback'
+    ? contextWindowTokens.value
+    : chatStore.value.contextUsage?.max_context_tokens ?? contextWindowTokens.value
+))
 const safetyDisabled = ref(false)
 const safetyLoading = ref(false)
 const dragDepth = ref(0)
@@ -216,22 +221,12 @@ async function reloadSessions() {
   }
 }
 
-async function createSession() {
-  if (!userId.value) {
-    return
-  }
-  // 当前对话没有任何消息时不创建新对话，只收起侧边栏
-  if (!chatStore.value.messages.some((m) => m.role !== 'system')) {
-    if (props.mode !== 'page') {
-      sessionDrawerOpen.value = false
-    }
-    return
-  }
-  // 先清理之前堆积的空会话，再创建新的
-  await sessionStore.pruneEmpty(userId.value)
-  const sessionId = await sessionStore.create(userId.value)
-  await selectSession(sessionId)
-
+/** Enters an unpersisted blank draft; the first user bubble creates its session. */
+function startNewConversationDraft() {
+  if (props.sessionId) return
+  sessionStore.clearSelection()
+  chatStore.value = useChatStore()
+  chatStore.value.clear()
   if (props.mode !== 'page') {
     sessionDrawerOpen.value = false
   }
@@ -272,12 +267,7 @@ async function sendMessage(text: string, reference = '') {
   if (!userId.value) {
     return
   }
-  // Bind a durable thread before starting the stream.  The previous thread
-  // can then keep streaming in its own store while this one begins.
-  if (!activeSessionId.value) {
-    const sessionId = await sessionStore.create(userId.value)
-    useActiveSessionChat(sessionId)
-  }
+  // ChatStore appends the user bubble before creating a missing session.
   await chatStore.value.send(
     userId.value,
     activeSessionId.value,
@@ -355,7 +345,7 @@ async function loadCurrentModelConfig() {
   try {
     const config = await fetchLLMConfig(userId.value)
     currentLargeModelName.value = config.effective_model_name?.trim() || config.model_name?.trim() || ''
-    contextWindowTokens.value = config.context_window_tokens ?? 1000000
+    contextWindowTokens.value = config.context_window_tokens ?? DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
   } catch {
     currentLargeModelName.value = ''
   }
@@ -719,15 +709,13 @@ watch(
   async (sessionId) => {
     selectedChildAgent.value = null
     // The first send creates and selects its session after inserting the local
-    // user message. Reloading the still-empty history here would clear it.
+    // user bubble. Keep that originating store visible for the whole stream.
+    if (sessionId && sessionStore.freshSessionIds.includes(sessionId)) return
     if (sessionId) useActiveSessionChat(sessionId)
     if (sessionId && remoteSessionPending.value === sessionId) {
       remoteSessionPending.value = ''
       return
     }
-    if (sessionId && sessionStore.freshSessionIds.includes(sessionId)) return
-    // Session creation updates the selected id before send() appends its local
-    // user bubble. Yield once so a fresh stream wins over an empty history load.
     await nextTick()
     if (sessionId && !chatStore.value.isStreaming && chatStore.value.messages.length === 0) {
       void loadSelectedSessionHistory(sessionId)
@@ -815,7 +803,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       :selected-session-id="activeSessionId"
       :streaming-session-ids="sessionStore.streamingSessionIds"
       @close="closeSessionDrawer"
-      @create="createSession"
+      @create="startNewConversationDraft"
       @select="selectSession"
     />
 
@@ -931,7 +919,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
             </DropdownMenuContent>
           </DropdownMenuPortal>
         </DropdownMenu>
-        <button class="panel-new-session" type="button" title="新对话" @click="createSession">
+        <button class="panel-new-session" type="button" title="新对话" @click="startNewConversationDraft">
           <IcIcon name="add" :size="17" />
           <span>新对话</span>
         </button>
@@ -955,7 +943,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         @toggle-task="toggleTaskListCard"
         @toggle-child="toggleChildAgentCard"
         @expand="emit('expand')"
-        @create="createSession"
+        @create="startNewConversationDraft"
         @toggle-chat-mode="settingsStore.toggleChatMode"
       >
         <template #window-controls><slot name="window-controls" /></template>
@@ -1016,7 +1004,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         :reference="referenceText"
         :attachments="chatStore.pendingAttachments"
         :context-tokens="chatStore.contextUsage?.current_tokens ?? 0"
-        :max-context-tokens="chatStore.contextUsage?.max_context_tokens ?? contextWindowTokens"
+        :max-context-tokens="displayedMaxContextTokens"
         :is-streaming="chatStore.isStreaming"
         @send="sendMessage"
         @toggle-web-search="handleToggleWebSearch"

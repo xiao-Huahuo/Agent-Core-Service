@@ -971,6 +971,11 @@ class SettingsService:
         small_api_key = self._normalize_optional_text(config.small_api_key)
         small_base_url = self._normalize_optional_text(config.small_base_url)
         small_model_name = self._normalize_optional_text(config.small_model_name)
+        large_context_tokens, small_context_tokens = self._resolve_context_window_defaults(
+            large_value=config.model_context_window_tokens,
+            small_value=config.small_model_context_window_tokens,
+            small_model_name=small_model_name,
+        )
         effective = self._effective_llm_fields(
             large_api_key=large_api_key,
             large_base_url=large_base_url,
@@ -987,6 +992,10 @@ class SettingsService:
             "small_api_key": small_api_key,
             "small_base_url": small_base_url,
             "small_model_name": small_model_name,
+            "model_context_window_tokens": large_context_tokens,
+            "model_max_output_tokens": int(config.model_max_output_tokens or 0),
+            "small_model_context_window_tokens": small_context_tokens,
+            "small_model_max_output_tokens": int(config.small_model_max_output_tokens or 0),
             **effective,
             "summary_trigger_tokens": self.config.memory.summary_trigger_tokens,
             "context_window_tokens": self.config.memory.context_window_tokens,
@@ -1007,6 +1016,11 @@ class SettingsService:
         small_api_key = self._normalize_optional_text(m.small_model_api_key)
         small_base_url = self._normalize_optional_text(m.small_model_base_url)
         small_model_name = self._normalize_optional_text(m.small_model_name)
+        large_context_tokens, small_context_tokens = self._resolve_context_window_defaults(
+            large_value=m.model_context_window_tokens,
+            small_value=m.small_model_context_window_tokens,
+            small_model_name=small_model_name,
+        )
         effective = self._effective_llm_fields(
             large_api_key=large_api_key,
             large_base_url=large_base_url,
@@ -1023,6 +1037,10 @@ class SettingsService:
             "small_api_key": small_api_key,
             "small_base_url": small_base_url,
             "small_model_name": small_model_name,
+            "model_context_window_tokens": large_context_tokens,
+            "model_max_output_tokens": int(m.model_max_output_tokens or 0),
+            "small_model_context_window_tokens": small_context_tokens,
+            "small_model_max_output_tokens": int(m.small_model_max_output_tokens or 0),
             **effective,
             "summary_trigger_tokens": mm.summary_trigger_tokens,
             "context_window_tokens": mm.context_window_tokens,
@@ -1031,6 +1049,22 @@ class SettingsService:
             "context_compression_target_ratio": mm.context_compression_target_ratio,
             "updated_at": self._utc_now().isoformat(),
         }
+
+    def _resolve_context_window_defaults(
+        self,
+        *,
+        large_value: Any,
+        small_value: Any,
+        small_model_name: str,
+    ) -> tuple[int, int]:
+        """把未填写的模型窗口解析为 100 万服务默认值，并保留小模型继承关系。"""
+
+        service_default = max(int(self.config.memory.context_window_tokens), 1)
+        large_context = max(int(large_value or 0), 0) or service_default
+        small_context = max(int(small_value or 0), 0) or (
+            service_default if small_model_name else large_context
+        )
+        return large_context, small_context
 
     def get_llm_config(self, *, user_id: str) -> dict:
         """获取用户自定义 LLM 配置，包含大模型和小模型两套；DB 无记录时回退到 AgentConfig 服务级默认值。"""
@@ -1051,6 +1085,10 @@ class SettingsService:
         small_api_key: str | None = None,
         small_base_url: str | None = None,
         small_model_name: str | None = None,
+        model_context_window_tokens: int | None = None,
+        model_max_output_tokens: int | None = None,
+        small_model_context_window_tokens: int | None = None,
+        small_model_max_output_tokens: int | None = None,
     ) -> dict:
         """保存用户自定义 LLM 配置，包含大模型和小模型两套。"""
         normalized_user_id = user_id.strip()
@@ -1066,6 +1104,10 @@ class SettingsService:
                     small_api_key=small_api_key or "",
                     small_base_url=small_base_url or "",
                     small_model_name=small_model_name or "",
+                    model_context_window_tokens=max(int(model_context_window_tokens or 0), 0),
+                    model_max_output_tokens=max(int(model_max_output_tokens or 0), 0),
+                    small_model_context_window_tokens=max(int(small_model_context_window_tokens or 0), 0),
+                    small_model_max_output_tokens=max(int(small_model_max_output_tokens or 0), 0),
                     updated_at=now,
                 )
             else:
@@ -1081,6 +1123,14 @@ class SettingsService:
                     config.small_base_url = small_base_url
                 if small_model_name is not None:
                     config.small_model_name = small_model_name
+                if model_context_window_tokens is not None:
+                    config.model_context_window_tokens = max(int(model_context_window_tokens), 0)
+                if model_max_output_tokens is not None:
+                    config.model_max_output_tokens = max(int(model_max_output_tokens), 0)
+                if small_model_context_window_tokens is not None:
+                    config.small_model_context_window_tokens = max(int(small_model_context_window_tokens), 0)
+                if small_model_max_output_tokens is not None:
+                    config.small_model_max_output_tokens = max(int(small_model_max_output_tokens), 0)
                 config.updated_at = now
             db.add(config)
             db.commit()

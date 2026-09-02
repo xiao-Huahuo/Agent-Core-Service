@@ -6,6 +6,31 @@ import { describe, expect, it, vi } from 'vitest'
 import MessageList from '../MessageList.vue'
 
 describe('MessageList attachment citation recovery', () => {
+  it('coalesces repeated scroll events into one animation-frame layout read', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: vi.fn(), configurable: true })
+    const callbacks: FrameRequestCallback[] = []
+    const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback)
+      return callbacks.length
+    })
+    const wrapper = mount(MessageList, {
+      props: { messages: [] },
+      global: {
+        plugins: [createPinia()],
+        stubs: { MessageBubble: true, FinalTurnSummary: true, LoadingState: true, LoaderCube: true },
+      },
+    })
+
+    await wrapper.get('.message-list').trigger('scroll')
+    await wrapper.get('.message-list').trigger('scroll')
+    await wrapper.get('.message-list').trigger('scroll')
+
+    expect(callbacks).toHaveLength(1)
+    callbacks[0]?.(performance.now())
+    wrapper.unmount()
+    frameSpy.mockRestore()
+  })
+
   it('recovers exact session-upload URIs for old assistant messages', () => {
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: vi.fn(), configurable: true })
     const uri = 'session-upload://u1/library/s1/image11.png'

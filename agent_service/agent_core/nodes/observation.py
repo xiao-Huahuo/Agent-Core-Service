@@ -19,8 +19,13 @@ from typing import Any
 from langchain_core.messages import AIMessage, SystemMessage
 
 from agent_service.agent_core.nodes.base import AgentState
-from agent_service.agent_core.nodes.model_decision import extract_token_usage, get_user_llm_overrides
+from agent_service.agent_core.nodes.model_decision import (
+    extract_token_usage,
+    get_user_llm_overrides,
+    get_user_model_capacity_overrides,
+)
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.core.context_budget import ModelCapacity
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import (
     FOREGROUND_AGENT_TASK,
@@ -29,6 +34,7 @@ from agent_service.services.scheduler import (
     get_llm_task_scheduler,
 )
 from agent_service.tools import ToolExecutor
+from agent_service.tools.result_envelope import render_tool_result_context
 from agent_service.tools.runtime_context import (
     get_context_mirror_callback,
     get_observation_content_callback,
@@ -126,6 +132,10 @@ class ObservationNode:
         """调用 LLM,流式场景下通过 callback 逐 token 推送。"""
 
         api_key, base_url, model_name, small_api_key, small_base_url, small_model_name = get_user_llm_overrides(state)
+        context_window_tokens, max_output_tokens = get_user_model_capacity_overrides(
+            state,
+            model_tier="small",
+        )
         messages = [system_message, context_message]
         context_callback = get_context_mirror_callback()
         if context_callback is not None:
@@ -138,6 +148,8 @@ class ObservationNode:
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
                 small_model_name=small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
                 node="observation",
             ))
         callback = get_observation_content_callback()
@@ -154,6 +166,8 @@ class ObservationNode:
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
                 small_model_name=small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
             ):
                 is_complete = chunk.get("status") == "complete"
                 if not is_complete:
@@ -178,6 +192,8 @@ class ObservationNode:
             small_api_key=small_api_key,
             small_base_url=small_base_url,
             small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
 
     def _check_overflow_then_decide(self, state: AgentState, llm_decision: str) -> str:
@@ -185,10 +201,18 @@ class ObservationNode:
 
         llm_config = state.get("llm_config") or {}
         model_name = str(llm_config.get("model_name") or self.config.model.model_name or "") or None
+        capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=model_name or self.config.model.local_model_name,
+            model_tier="large",
+            context_window_tokens=int(llm_config.get("model_context_window_tokens") or 0) or None,
+            max_output_tokens=int(llm_config.get("model_max_output_tokens") or 0) or None,
+        )
         if ContextBuilder.should_compress(
             state.get("messages", []),
             config=self.config,
             model_name=model_name,
+            capacity=capacity,
         ):
             return "compress"
         return llm_decision
@@ -225,9 +249,7 @@ class ObservationNode:
                 for tc in calls:
                     tool_calls.append(tc)
             elif msg_type == "tool" and content:
-                tool_results.append(
-                    f"  结果: {content[:self.config.limits.agent_observation_tool_result_chars]}"
-                )
+                tool_results.append(f"  结果: {render_tool_result_context(message)}")
 
         if tool_calls:
             tc = tool_calls[-1]

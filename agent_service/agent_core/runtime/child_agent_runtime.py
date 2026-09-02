@@ -121,6 +121,17 @@ class ChildAgentRuntimeMixin:
         """向指定子 Agent 下一次安全检查点投递上下文更新。"""
 
         self.child_agent_manager.update_context(run_id, update)
+
+    def claim_child_agent_completion_wakeup(self, *, run_id: str, user_id: str, session_id: str) -> bool:
+        """校验归属后原子领取一个子 Agent Turn 的终态唤醒。"""
+
+        record = self.child_agent_manager.get(run_id)
+        if record is None:
+            raise KeyError(f"子 Agent {run_id} 不存在。")
+        if record.contract.user_id != user_id or record.contract.session_id != session_id:
+            raise PermissionError(f"当前会话不能领取子 Agent {run_id} 的完成提醒。")
+        return self.child_agent_manager.claim_completion_wakeup(run_id)
+
     @staticmethod
     def _child_record_to_dict(record: Any) -> dict[str, Any]:
         """将子 Agent 记录转为 REST/gRPC/前端共用的普通字典。"""
@@ -470,21 +481,33 @@ class ChildAgentRuntimeMixin:
         self,
         *,
         parent_run_id: str,
+        session_id: str,
         run_ids: list[str] | None = None,
         timeout_seconds: float | None = None,
     ) -> str:
         """由当前主 Agent 工具上下文等待一个后台子 Agent 结果并返回 JSON。"""
 
-        result = self.child_agent_manager.wait_for_children(
-            parent_run_id=parent_run_id,
-            run_ids=run_ids or [],
-            timeout_seconds=(
-                self.config.limits.agent_child_wait_timeout_seconds
-                if timeout_seconds is None
-                else timeout_seconds
-            ),
+        wait_timeout = (
+            self.config.limits.agent_child_wait_timeout_seconds
+            if timeout_seconds is None
+            else timeout_seconds
         )
         records = self.child_agent_manager.list_children(parent_run_id)
+        current_run_ids = {record.run_id for record in records}
+        use_session_scope = not records or bool(run_ids and not set(run_ids).issubset(current_run_ids))
+        if use_session_scope:
+            result = self.child_agent_manager.wait_for_children_for_session(
+                session_id=session_id,
+                run_ids=run_ids or [],
+                timeout_seconds=wait_timeout,
+            )
+            records = self.child_agent_manager.list_children_for_session(session_id)
+        else:
+            result = self.child_agent_manager.wait_for_children(
+                parent_run_id=parent_run_id,
+                run_ids=run_ids or [],
+                timeout_seconds=wait_timeout,
+            )
         if run_ids:
             target_run_ids = set(run_ids)
             records = [record for record in records if record.run_id in target_run_ids]

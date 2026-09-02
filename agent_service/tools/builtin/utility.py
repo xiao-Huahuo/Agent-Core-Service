@@ -58,6 +58,59 @@ def list_available_tools() -> str:
             first_line = first_line[:description_chars].rstrip() + "…"
         lines.append(f"- {display}({name}): {first_line}")
     return "\n".join(lines)
+
+
+def read_tool_result(
+    content_ref: str,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    cursor: int | None = None,
+) -> str:
+    """按稳定引用续读当前会话中已持久化的完整工具结果。"""
+
+    runtime = get_tool_runtime()
+    if runtime.message_service is None:
+        return "读取失败: 当前运行时缺少消息服务。"
+    prefix = "tool-result://"
+    normalized_ref = content_ref.strip()
+    if not normalized_ref.startswith(prefix):
+        return "读取失败: content_ref 必须使用 tool-result:// 引用。"
+    tool_call_id = normalized_ref.removeprefix(prefix).strip()
+    if not tool_call_id:
+        return "读取失败: content_ref 缺少 tool_call_id。"
+    messages = runtime.message_service.list_session_messages(
+        user_id=runtime.user_id,
+        session_id=runtime.session_id,
+        limit=None,
+        exclude_roles=None,
+    )
+    target = next(
+        (
+            message
+            for message in reversed(messages)
+            if message.role == "tool" and message.tool_call_id == tool_call_id
+        ),
+        None,
+    )
+    if target is None:
+        return "读取失败: 当前会话中不存在对应工具结果。"
+    lines = target.content.splitlines()
+    total_lines = len(lines)
+    default_lines = runtime.config.limits.terminal_read_default_lines
+    max_lines = runtime.config.limits.terminal_read_max_lines
+    start = max(int(cursor if cursor is not None else start_line or 0), 0)
+    requested_end = int(end_line) if end_line is not None else start + default_lines
+    end = min(max(requested_end, start), start + max_lines, total_lines)
+    next_cursor = end if end < total_lines else None
+    return json.dumps({
+        "content_ref": normalized_ref,
+        "start_line": start,
+        "end_line": end,
+        "total_lines": total_lines,
+        "next_cursor": next_cursor,
+        "complete": next_cursor is None,
+        "content": "\n".join(lines[start:end]),
+    }, ensure_ascii=False, indent=2)
 def list_skills() -> str:
     """
     List all skills visible to the current user.

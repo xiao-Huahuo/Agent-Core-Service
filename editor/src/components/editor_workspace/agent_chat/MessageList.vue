@@ -6,7 +6,7 @@
   the user scrolls upward to inspect history.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import LoadingState from '@/components/common/LoadingState.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
@@ -42,6 +42,7 @@ const containerRef = ref<HTMLDivElement | null>(null)
 const isPinnedToBottom = ref(true)
 const isThinkingActive = computed(() => Boolean(props.isStreaming))
 const undoingSnapshotId = ref('')
+let scrollRafId = 0
 
 function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
   return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
@@ -104,7 +105,11 @@ function scrollToBottom(options: ScrollToOptions = {}) {
 }
 
 function handleScroll() {
-  setPinnedToBottom(isNearBottom())
+  if (scrollRafId !== 0) return
+  scrollRafId = window.requestAnimationFrame(() => {
+    scrollRafId = 0
+    setPinnedToBottom(isNearBottom())
+  })
 }
 
 function scheduleScrollIfNeeded() {
@@ -331,6 +336,10 @@ onMounted(() => {
   setPinnedToBottom(true)
 })
 
+onBeforeUnmount(() => {
+  if (scrollRafId !== 0) window.cancelAnimationFrame(scrollRafId)
+})
+
 defineExpose({
   scrollToBottom,
 })
@@ -413,6 +422,15 @@ defineExpose({
 .message-list.compact {
   padding: var(--space-10);
   padding-bottom: 108px;
+}
+
+/* Completed offscreen messages retain their measured scroll size while
+   Chromium skips layout and paint for their expensive Markdown/tool DOM. */
+.message-list :deep(.bubble-row),
+.message-list :deep(.tool-action-row),
+.message-list :deep(.child-agent-event-row) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
 }
 
 .message-list::-webkit-scrollbar {

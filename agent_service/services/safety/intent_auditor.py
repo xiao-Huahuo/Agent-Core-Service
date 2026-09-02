@@ -25,6 +25,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.core.context_budget import capacity_overrides_from_mapping
 from agent_service.services.scheduler import (
     FOREGROUND_AGENT_TASK,
     LLMTaskScheduler,
@@ -91,6 +92,10 @@ class IntentAuditor:
             HumanMessage(content=user_input),
         ]
         api_key, base_url, small_api_key, small_base_url = resolve_llm_overrides_from_config(llm_config)
+        context_window_tokens, max_output_tokens = capacity_overrides_from_mapping(
+            llm_config,
+            model_tier=SMALL_MODEL_TIER,
+        )
         try:
             response = scheduler.invoke_chat(
                 task_type=FOREGROUND_AGENT_TASK,
@@ -102,6 +107,8 @@ class IntentAuditor:
                 base_url=base_url,
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
             )
             parsed = self._parse_response(str(response.content))
             return parsed

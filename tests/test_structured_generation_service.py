@@ -104,11 +104,15 @@ def test_structured_generation_uses_foreground_small_model_queue(monkeypatch) ->
     monkeypatch.setattr(
         structured_generation_module,
         "get_user_llm_overrides",
-        lambda _configurable: (None, None, None, None, None, None),
+        lambda _configurable, _settings=None: (None, None, None, None, None, None),
     )
     service = StructuredGenerationService(
         config=AgentConfig.load_config(ensure_directories=False, ensure_models=False),
         task_scheduler=scheduler,
+        settings_service=SimpleNamespace(get_llm_config=lambda **_kwargs: {
+            "small_model_context_window_tokens": 131_072,
+            "small_model_max_output_tokens": 8_192,
+        }),
     )
 
     response = service.generate_fields(make_request())
@@ -116,3 +120,33 @@ def test_structured_generation_uses_foreground_small_model_queue(monkeypatch) ->
     assert response.results[0].value == "Fast"
     assert scheduler.invoke_chat.call_args.kwargs["task_type"] == "foreground_agent"
     assert scheduler.invoke_chat.call_args.kwargs["model_tier"] == "small"
+    assert scheduler.invoke_chat.call_args.kwargs["context_window_tokens"] == 131_072
+    assert scheduler.invoke_chat.call_args.kwargs["max_output_tokens"] == 8_192
+
+
+def test_structured_generation_processes_tail_chunk_instead_of_prefix_truncation() -> None:
+    """来源尾部字段必须通过动态 token 分块参与生成。"""
+
+    config = AgentConfig.load_config(ensure_directories=False, ensure_models=False)
+    config.memory.context_window_tokens = 1_000
+    config.memory.context_unknown_output_fallback_tokens = 100
+    seen_tail = False
+
+    def invoke(messages, _user_id):  # noqa: ANN001, ANN202
+        nonlocal seen_tail
+        content = str(messages[-1].content)
+        if "TAIL_MARKER" in content:
+            seen_tail = True
+            return '{"title":"Tail title"}'
+        return '{"title":""}'
+
+    service = StructuredGenerationService(config=config, chat_invoker=invoke)
+    request = make_request(fields=[
+        StructuredGenerationField(id="title", title="标题", type="text", required=True),
+    ])
+    request.source.content = ("prefix " * 2_000) + "TAIL_MARKER"
+
+    response = service.generate_fields(request)
+
+    assert seen_tail is True
+    assert response.results[0].value == "Tail title"

@@ -18,6 +18,7 @@ recent_messages = service.list_recent_messages(user_id="u1", session_id="s1", li
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import time
 from uuid import uuid4
 
@@ -180,6 +181,113 @@ class MessageService:
             records = list(db_session.exec(statement).all())
             records.reverse()
             return [MessageOut.from_record(record) for record in records]
+
+    def list_chat_messages(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        limit: int | None,
+    ) -> list[MessageOut]:
+        """把完整 Agent 事件日志投影为与实时聊天一致的语义消息序列。"""
+
+        if limit is not None and limit <= 0:
+            return []
+        raw_messages = self.list_session_messages(
+            user_id=user_id,
+            session_id=session_id,
+            limit=None,
+        )
+        turns: list[list[MessageOut]] = []
+        turn: list[MessageOut] = []
+        for message in raw_messages:
+            if message.role == "user" and turn:
+                turns.append(turn)
+                turn = []
+            turn.append(message)
+        if turn:
+            turns.append(turn)
+
+        projected: list[MessageOut] = []
+        seen_wakeups: set[tuple[str, str, str]] = set()
+        seen_wakeup_agent_content: set[str] = set()
+        kept_empty_wait = False
+        for messages in turns:
+            wakeup_key = self._wakeup_turn_key(messages)
+            if wakeup_key is not None:
+                if wakeup_key in seen_wakeups:
+                    continue
+                seen_wakeups.add(wakeup_key)
+            for message in self._project_chat_turn(messages):
+                if self._is_empty_child_wait(message):
+                    if kept_empty_wait:
+                        continue
+                    kept_empty_wait = True
+                if (
+                    wakeup_key is not None
+                    and message.role == "assistant"
+                    and (message.metadata_json or {}).get("node") in {"agent", "agent_simple"}
+                    and message.content
+                ):
+                    if message.content in seen_wakeup_agent_content:
+                        continue
+                    seen_wakeup_agent_content.add(message.content)
+                projected.append(message)
+        return projected[-limit:] if limit is not None else projected
+
+    @staticmethod
+    def _wakeup_turn_key(messages: list[MessageOut]) -> tuple[str, str, str] | None:
+        """返回自动子 Agent 唤醒的稳定身份，用于兼容清理旧版重复 Turn。"""
+
+        user_message = next((message for message in messages if message.role == "user"), None)
+        metadata = user_message.metadata_json if user_message is not None else None
+        if not isinstance(metadata, dict) or not metadata.get("wakeup"):
+            return None
+        event = metadata.get("child_agent_event")
+        child = event.get("child") if isinstance(event, dict) else None
+        run_id = str(child.get("run_id") or "") if isinstance(child, dict) else ""
+        status = str(child.get("status") or "") if isinstance(child, dict) else ""
+        event_name = str(event.get("event_name") or "") if isinstance(event, dict) else ""
+        return (run_id, status, event_name) if run_id and status and event_name else None
+
+    @staticmethod
+    def _project_chat_turn(messages: list[MessageOut]) -> list[MessageOut]:
+        """折叠一个用户 Turn 的中间 agent 迭代和重复空等待事件。"""
+
+        agent_indexes = [
+            index
+            for index, message in enumerate(messages)
+            if message.role == "assistant"
+            and (message.metadata_json or {}).get("node") in {"agent", "agent_simple"}
+        ]
+        agent_index_set = set(agent_indexes)
+        final_agent_index = agent_indexes[-1] if agent_indexes else None
+        projected: list[MessageOut] = []
+        for index, message in enumerate(messages):
+            if index in agent_index_set and index != final_agent_index:
+                continue
+            projected.append(message)
+        return projected
+
+    @staticmethod
+    def _is_empty_child_wait(message: MessageOut) -> bool:
+        """识别 `wait_for_child_agents` 返回无结果、无子任务的病态重试行。"""
+
+        if message.role != "tool" or not message.tool_call_id:
+            return False
+        try:
+            payload = json.loads(message.content)
+        except (json.JSONDecodeError, TypeError):
+            return False
+        if not isinstance(payload, dict) or payload.get("result") is not None or payload.get("children") != []:
+            return False
+        traces = (message.metadata_json or {}).get("trace")
+        return isinstance(traces, list) and any(
+            isinstance(trace, dict)
+            and trace.get("tool_call_id") == message.tool_call_id
+            and trace.get("tool_name") == "wait_for_child_agents"
+            for trace in traces
+        )
 
     def list_user_messages(self, *, user_id: str, limit: int | None = None) -> list[MessageOut]:
         """

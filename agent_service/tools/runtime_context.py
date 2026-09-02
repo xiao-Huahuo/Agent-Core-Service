@@ -59,6 +59,7 @@ class ToolRuntimeState:
     change_service: AgentChangeService | None = None
     skill_service: SkillService | None = None
     settings_service: SettingsService | None = None
+    message_service: Any = None
     database_engine: Engine | None = None
     agent_access_mode: str = AGENT_ACCESS_SANDBOX
     long_term_memory_enabled: bool = True
@@ -88,6 +89,7 @@ def set_tool_runtime(
     change_service: AgentChangeService | None = None,
     skill_service: Any = None,
     settings_service: Any = None,
+    message_service: Any = None,
     database_engine: Any = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
     agent_access_mode: str = AGENT_ACCESS_SANDBOX,
@@ -125,6 +127,7 @@ def set_tool_runtime(
         change_service=change_service,
         skill_service=skill_service,
         settings_service=settings_service,
+        message_service=message_service,
         database_engine=database_engine or getattr(resolved_memory_service, "engine", None),
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
         long_term_memory_enabled=bool(long_term_memory_enabled),

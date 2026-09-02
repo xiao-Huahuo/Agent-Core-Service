@@ -9,7 +9,7 @@
 import { computed, ref } from 'vue'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 
-import { deleteAgentAttachment, fetchChildAgents, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
+import { claimChildAgentWakeup, deleteAgentAttachment, fetchChildAgents, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
 import type {
   AgentAccessMode,
   AgentAttachmentUploadResponse,
@@ -48,6 +48,7 @@ export interface AgentContextUsage {
   max_context_tokens: number
   trigger_tokens: number
   target_tokens: number
+  capacity_source?: string
 }
 
 /** Compression lifecycle rendered independently from generic Agent thinking. */
@@ -144,6 +145,7 @@ function asContextUsage(value: unknown): AgentContextUsage | null {
     max_context_tokens: maxContextTokens,
     trigger_tokens: Math.max(0, asFiniteNumber(record.trigger_tokens) ?? 0),
     target_tokens: Math.max(0, asFiniteNumber(record.target_tokens) ?? 0),
+    ...(asString(record.capacity_source) ? { capacity_source: asString(record.capacity_source) } : {}),
   }
 }
 
@@ -243,8 +245,6 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   /** 思考文本独立缓冲,与正文 flush 互不干扰。 */
   const pendingThinking = new Map<AgentChatMessage, string>()
   let thinkingFlushTimer: number | null = null
-  /** A 20 Hz draft cadence leaves most frames available for input and animation. */
-  const streamDraftFlushMs = 50
   /** Session identity is configured only for stores mirrored between Electron windows. */
   let windowSyncSessionId = ''
   let turnStartedAtMs = 0
@@ -383,7 +383,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     if (flushTimer !== null) {
       return
     }
-    flushTimer = window.setTimeout(() => flushStreamContent(), streamDraftFlushMs)
+    flushTimer = window.requestAnimationFrame(() => flushStreamContent())
   }
 
   /** Buffers a delta against its immutable owner rather than the latest message. */
@@ -416,7 +416,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     if (thinkingFlushTimer !== null) {
       return
     }
-    thinkingFlushTimer = window.setTimeout(() => flushStreamThinking(), streamDraftFlushMs)
+    thinkingFlushTimer = window.requestAnimationFrame(() => flushStreamThinking())
   }
 
   /**
@@ -431,7 +431,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   /** Immediately commits all buffered thinking and cancels its pending draft tick. */
   function forceFlushThinking() {
     if (thinkingFlushTimer !== null) {
-      window.clearTimeout(thinkingFlushTimer)
+      window.cancelAnimationFrame(thinkingFlushTimer)
       thinkingFlushTimer = null
     }
     flushStreamThinking()
@@ -464,7 +464,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
       pendingContent.clear()
     }
     if (flushTimer !== null && pendingContent.size === 0) {
-      window.clearTimeout(flushTimer)
+      window.cancelAnimationFrame(flushTimer)
       flushTimer = null
     }
   }
@@ -472,7 +472,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   /** Immediately commits buffered text, preserving other owners if one is selected. */
   function forceFlushContent(target?: AgentChatMessage) {
     if (flushTimer !== null) {
-      window.clearTimeout(flushTimer)
+      window.cancelAnimationFrame(flushTimer)
       flushTimer = null
     }
     flushStreamContent(target)
@@ -926,6 +926,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
                 seenChildStatus.set(childPayload.run_id, childStatus)
                 continue
               }
+              if (targetSessionId) {
+                await claimChildAgentWakeup(childPayload.run_id, userId, targetSessionId)
+              }
               seenChildStatus.set(childPayload.run_id, childStatus)
             }
           }
@@ -974,7 +977,15 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
             appendStreamContent(message, content)
             markThinkingDurationIfNeeded(message, true)
           } else {
-            cancelPendingFlush(message)
+            forceFlushContent(message)
+            const streamedPrefix = message.content
+            const reconciledChars = content.startsWith(streamedPrefix)
+              ? content.length - streamedPrefix.length
+              : Math.max(0, content.length - streamedPrefix.length)
+            message.metadata = {
+              ...(message.metadata ?? {}),
+              frontend_stream_reconciled_chars: reconciledChars,
+            }
             // A complete response is authoritative when it extends or repairs
             // the streamed prefix; shorter unrelated text never erases it.
             if (!message.content) {
@@ -1061,6 +1072,8 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
           sessionStore.settleFreshSession(targetSessionId)
         }
       }
+      // Do not abort an already released SSE reader when a later draft clears this store.
+      if (streamAbortController?.signal === signal) streamAbortController = null
     }
   }
 
@@ -1069,7 +1082,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     historyAbortController?.abort()
     cancelPendingFlush()
     if (thinkingFlushTimer !== null) {
-      window.clearTimeout(thinkingFlushTimer)
+      window.cancelAnimationFrame(thinkingFlushTimer)
       thinkingFlushTimer = null
     }
     pendingThinking.clear()
@@ -1113,14 +1126,21 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   }
 
   function terminalChildStatusLabel(status: ChildAgentRecord['status']) {
-    return {
+    const labels: Record<ChildAgentRecord['status'], string> = {
+      created: '已创建',
+      running: '运行中',
       completed: '已完成',
       failed: '失败',
       stopped: '已停止',
-    }[status] || status
+    }
+    return labels[status]
   }
 
   async function wakeUpAgentForChild(child: ChildAgentRecord) {
+    const claim = await claimChildAgentWakeup(child.run_id, childWatcherUserId, childWatcherSessionId)
+    if (!claim.claimed) {
+      return
+    }
     const title = child.name?.trim() || child.goal
     const summary = (child.summary || '').trim()
     let resultText = ''
@@ -1186,6 +1206,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         continue
       }
       if (isTerminalChildStatus(previous)) {
+        if (!isTerminalChildStatus(child.status)) {
+          seenChildStatus.set(child.run_id, child.status)
+        }
         continue
       }
       if (!isTerminalChildStatus(child.status)) {

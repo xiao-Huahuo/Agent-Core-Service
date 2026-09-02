@@ -8,14 +8,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { SavedLLMConfig } from '@/api/settings'
+import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS, type SavedLLMConfig } from '@/api/settings'
 
 const largeModelName = defineModel<string>('largeModelName', { required: true })
 const largeBaseUrl = defineModel<string>('largeBaseUrl', { required: true })
 const largeApiKey = defineModel<string>('largeApiKey', { required: true })
+const largeContextWindowTokens = defineModel<number>('largeContextWindowTokens', { required: true })
+const largeMaxOutputTokens = defineModel<number>('largeMaxOutputTokens', { required: true })
 const smallModelName = defineModel<string>('smallModelName', { required: true })
 const smallBaseUrl = defineModel<string>('smallBaseUrl', { required: true })
 const smallApiKey = defineModel<string>('smallApiKey', { required: true })
+const smallContextWindowTokens = defineModel<number>('smallContextWindowTokens', { required: true })
+const smallMaxOutputTokens = defineModel<number>('smallMaxOutputTokens', { required: true })
 const showLargeKey = defineModel<boolean>('showLargeKey', { required: true })
 const showSmallKey = defineModel<boolean>('showSmallKey', { required: true })
 const modelEditing = defineModel<boolean>('modelEditing', { required: true })
@@ -63,10 +67,14 @@ function clearModelDraft(target: 'large' | 'small') {
     largeModelName.value = ''
     largeBaseUrl.value = ''
     largeApiKey.value = ''
+    largeContextWindowTokens.value = DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+    largeMaxOutputTokens.value = 0
   } else {
     smallModelName.value = ''
     smallBaseUrl.value = ''
     smallApiKey.value = ''
+    smallContextWindowTokens.value = DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+    smallMaxOutputTokens.value = 0
   }
   modelEditing.value = true
 }
@@ -98,6 +106,10 @@ function clearModelDraft(target: 'large' | 'small') {
     <div class="model-block">
       <input v-model="largeModelName" placeholder="模型名称" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
       <input v-model="largeBaseUrl" placeholder="Base URL" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+      <div class="capacity-row">
+        <input v-model.number="largeContextWindowTokens" type="number" min="0" placeholder="上下文窗口 token（默认 1000000）" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+        <input v-model.number="largeMaxOutputTokens" type="number" min="0" placeholder="最大输出 token（0=继承）" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+      </div>
       <div class="key-row">
         <input v-model="largeApiKey" :type="showLargeKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
         <button class="toggle-key" @click="showLargeKey = !showLargeKey">{{ showLargeKey ? '隐藏' : '显示' }}</button>
@@ -112,6 +124,10 @@ function clearModelDraft(target: 'large' | 'small') {
     <div class="model-block">
       <input v-model="smallModelName" placeholder="模型名称（留空继承大模型）" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
       <input v-model="smallBaseUrl" placeholder="Base URL（留空继承大模型）" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+      <div class="capacity-row">
+        <input v-model.number="smallContextWindowTokens" type="number" min="0" placeholder="上下文窗口 token（默认 1000000）" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+        <input v-model.number="smallMaxOutputTokens" type="number" min="0" placeholder="最大输出 token（0=继承）" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+      </div>
       <div class="key-row">
         <input v-model="smallApiKey" :type="showSmallKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
         <button class="toggle-key" @click="showSmallKey = !showSmallKey">{{ showSmallKey ? '隐藏' : '显示' }}</button>
@@ -202,6 +218,30 @@ function clearModelDraft(target: 'large' | 'small') {
   justify-content: space-between;
   min-height: 28px;
   margin-bottom: var(--space-10);
+}
+
+.capacity-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.capacity-row input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 480px) {
+  .capacity-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .model-heading h3 {

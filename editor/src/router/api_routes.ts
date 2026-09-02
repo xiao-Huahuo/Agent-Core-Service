@@ -50,6 +50,7 @@ export const API_ROUTES = {
   AGENT_TOKEN_USAGE: '/agent/token-usage',
   ACTIVITY_HEATMAP: '/activity/heatmap',
   AGENT_CHILDREN: '/agent/children',
+  AGENT_CHILD_WAKEUP_CLAIM: (runId: string) => `/agent/children/${encodeURIComponent(runId)}/claim-wakeup`,
   AGENT_CHILD_DSH_WEB: (runId: string) => `/agent/children/${encodeURIComponent(runId)}/dsh-web`,
   SESSION_MESSAGE_HISTORY: '/sessions/observability/history',
   DEBUG_RUNTIME_APIS: '/debug/runtime-apis',

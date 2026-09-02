@@ -35,6 +35,16 @@ export interface AgentModelRequestSnapshot {
   model_kwargs: Record<string, unknown>
   messages: Array<Record<string, unknown>>
   tools: Array<Record<string, unknown>>
+  context_budget?: {
+    capacity_source: string
+    effective_window_tokens: number
+    input_budget_tokens: number
+    final_input_tokens: number
+    fixed_tokens: number
+    remaining_tokens: number
+    policy_version: string
+    representations: Array<Record<string, unknown>>
+  }
 }
 
 export type AgentLoopMode = 'auto' | 'simple' | 'react' | 'plan'
@@ -308,6 +318,17 @@ export interface ChildAgentListResponse {
 
 export function fetchChildAgents(sessionId: string): Promise<ChildAgentListResponse> {
   return apiGet<ChildAgentListResponse>(API_ROUTES.AGENT_CHILDREN, { session_id: sessionId })
+}
+
+export function claimChildAgentWakeup(
+  runId: string,
+  userId: string,
+  sessionId: string,
+): Promise<{ run_id: string; claimed: boolean }> {
+  return apiPost(API_ROUTES.AGENT_CHILD_WAKEUP_CLAIM(runId), {
+    user_id: userId,
+    session_id: sessionId,
+  })
 }
 
 export function stopChildAgent(runId: string): Promise<{ run_id: string; ok: boolean }> {

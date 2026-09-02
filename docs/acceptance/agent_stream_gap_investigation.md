@@ -68,3 +68,25 @@ DeepSeek 官方文档的 thinking/tool-call 输出示例也明确展示一个 as
 ## 观测缺口
 
 当前日志没有记录每次模型调用的原始 chunk 字段形状、各通道字符计数或“终态正文减去已流正文”的差值，因此线上只能看到结果，无法直接定位是哪一批 chunk 被过滤。上述安全计数器应作为修复的一部分，不记录用户正文。
+
+## 修复结果
+
+- scheduler 已将 reasoning、content、tool calls 改为独立通道；混合字段不再互相阻断。
+- 本地与 Redis worker 均发布 reasoning/content，终态 message 携带同一份 `stream_diagnostics`。
+- 诊断仅记录 raw/streamed/final/reconciled 字符数、混合 chunk 数和 mismatch 布尔值，不记录正文。
+- 新增 `DeepSeekChatOpenAI` provider adapter，覆盖流式、非流式和后续请求三条转换，确保 `reasoning_content` 被提取并随 assistant tool-call 消息回传。
+- `langchain-core==1.3.3`、`langchain-openai==1.2.1`、`openai==2.36.0` 已锁定。
+- 前端在终态前先冲刷剩余草稿，并记录 `frontend_stream_reconciled_chars`；终态修正仍作为数据完整性兜底。
+
+### 自动化与实际验收
+
+- Scheduler 全文件：16/16。
+- AgentCore、simple、持久化和依赖锁定：7/7。
+- 前端 chat/API：28/28。
+- Vite production build：通过，5,117 modules transformed。
+- 真实 5173 代理时序：A 在 264ms、B 在 396ms、C 与终态在 563ms；终态 `reconciled_content_chars=0`。
+- 真实 Agent 页面 DOM 依次观察到 `A → AB → ABC`，thinking 为 `R1R2`，没有终态突增；截图如下。
+
+![Agent 连续流式输出验收](./agent_stream_gap_fixed.png)
+
+界面冒烟使用最小受控后端，只实现本任务所需流端点；其余工作区接口返回的 404 属于测试夹具缺省，不涉及 `/agent/stream`，流请求本身为 200 且完成全部断言。

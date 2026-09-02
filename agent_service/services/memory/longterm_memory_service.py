@@ -176,6 +176,39 @@ class LongTermMemoryService:
                 pass
         return True
 
+    def find_user_memory_by_content(
+        self,
+        *,
+        user_id: str,
+        content: str,
+    ) -> LongTermMemorySpecOut | None:
+        """优先精确、其次包含匹配一条用户记忆，不受列表分页上限影响。"""
+
+        normalized = content.strip()
+        if not normalized:
+            return None
+        base = (
+            select(LongTermMemorySpec)
+            .where(LongTermMemorySpec.user_id == user_id)
+            .where(LongTermMemorySpec.tag == self.config.constants.memory_tag)
+        )
+        with Session(self.engine) as db_session:
+            exact = db_session.exec(
+                base
+                .where(func.lower(func.trim(LongTermMemorySpec.content)) == normalized.casefold())
+                .order_by(LongTermMemorySpec.updated_at.desc())
+                .limit(1)
+            ).first()
+            if exact is not None:
+                return LongTermMemorySpecOut.from_record(exact)
+            contained = db_session.exec(
+                base
+                .where(LongTermMemorySpec.content.ilike(f"%{normalized}%"))
+                .order_by(LongTermMemorySpec.updated_at.desc())
+                .limit(1)
+            ).first()
+            return LongTermMemorySpecOut.from_record(contained) if contained is not None else None
+
     def delete_memories_for_source(
         self,
         *,

@@ -24,7 +24,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from agent_service.services.scheduler.types import (
@@ -40,6 +40,85 @@ from agent_service.services.scheduler.types import (
     SUPPORTED_TASK_TYPES,
     ScheduledLLMTask,
 )
+from agent_service.core.context_budget import ModelCapacity
+
+
+class DeepSeekChatOpenAI(ChatOpenAI):
+    """Preserve DeepSeek ``reasoning_content`` across LangChain conversions.
+
+    ChatOpenAI intentionally targets the standard OpenAI schema and may drop
+    provider-specific fields. DeepSeek requires reasoning to be streamed,
+    persisted, and replayed with assistant tool-call messages.
+    """
+
+    @staticmethod
+    def _reasoning_text(value: Any) -> str:
+        """Normalize provider string/list reasoning payloads to one string."""
+
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            return "".join(str(part) for part in value)
+        return ""
+
+    @staticmethod
+    def supports_model(model_name: str) -> bool:
+        """识别直连名和模型市场常见的命名空间 DeepSeek 标识。"""
+
+        normalized = model_name.strip().lower().replace(":", "/")
+        return any(part.startswith("deepseek") for part in normalized.split("/"))
+
+    def _convert_chunk_to_generation_chunk(
+        self,
+        chunk: dict[str, Any],
+        default_chunk_class: type,
+        base_generation_info: dict[str, Any] | None,
+    ) -> Any:
+        """Attach raw DeepSeek reasoning delta to the converted message chunk."""
+
+        generation = super()._convert_chunk_to_generation_chunk(
+            chunk,
+            default_chunk_class,
+            base_generation_info,
+        )
+        choices = chunk.get("choices", []) or chunk.get("chunk", {}).get("choices", [])
+        delta = choices[0].get("delta", {}) if choices else {}
+        reasoning = self._reasoning_text(delta.get("reasoning_content"))
+        if generation is not None and reasoning:
+            generation.message.additional_kwargs["reasoning_content"] = reasoning
+        return generation
+
+    def _create_chat_result(
+        self,
+        response: dict[str, Any] | Any,
+        generation_info: dict[str, Any] | None = None,
+    ) -> Any:
+        """Attach full DeepSeek reasoning to non-streaming/final results."""
+
+        response_dict = response if isinstance(response, dict) else response.model_dump()
+        result = super()._create_chat_result(response, generation_info)
+        choices = response_dict.get("choices", [])
+        message = choices[0].get("message", {}) if choices else {}
+        reasoning = self._reasoning_text(message.get("reasoning_content"))
+        if result.generations and reasoning:
+            result.generations[0].message.additional_kwargs["reasoning_content"] = reasoning
+        return result
+
+    def _get_request_payload(self, input_: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Replay assistant reasoning required by DeepSeek thinking tool calls."""
+
+        payload = super()._get_request_payload(input_, *args, **kwargs)
+        serialized_messages = payload.get("messages")
+        if not isinstance(serialized_messages, list):
+            return payload
+        source_messages = self._convert_input(input_).to_messages()
+        for source, serialized in zip(source_messages, serialized_messages, strict=False):
+            reasoning = self._reasoning_text(
+                getattr(source, "additional_kwargs", {}).get("reasoning_content")
+            )
+            if reasoning and isinstance(serialized, dict) and serialized.get("role") == "assistant":
+                serialized["reasoning_content"] = reasoning
+        return payload
 
 
 class LLMTaskRuntimeMixin:
@@ -111,7 +190,12 @@ class LLMTaskRuntimeMixin:
                 )
             else:
                 model_kwargs = self.config.model.get_model_kwargs(model_name)
-                model = ChatOpenAI(
+                model_class = (
+                    DeepSeekChatOpenAI
+                    if DeepSeekChatOpenAI.supports_model(model_name)
+                    else ChatOpenAI
+                )
+                model = model_class(
                     model=model_name,
                     api_key=resolved_api_key,
                     base_url=resolved_base_url,
@@ -147,6 +231,8 @@ class LLMTaskRuntimeMixin:
         small_base_url: str | None = None,
         small_model_name: str | None = None,
         node: str = "agent",
+        context_window_tokens: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
         """返回即将提交给模型的完整、无密钥请求快照。
 
@@ -166,6 +252,19 @@ class LLMTaskRuntimeMixin:
             small_base_url=small_base_url,
             small_model_name=small_model_name,
         )
+        prepared_messages, context_budget = self.prepare_messages_for_model(
+            messages=messages,
+            tool_names=selected_names,
+            model_tier=model_tier,
+            api_key=api_key,
+            base_url=base_url,
+            model_name=model_name,
+            small_api_key=small_api_key,
+            small_base_url=small_base_url,
+            small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
+        )
         selected_name_set = set(selected_names)
         tools = [
             convert_to_openai_tool(tool)
@@ -179,9 +278,77 @@ class LLMTaskRuntimeMixin:
             "temperature": resolved_temperature,
             "timeout_seconds": timeout_seconds or self._resolve_timeout_seconds(FOREGROUND_AGENT_TASK),
             "model_kwargs": self.config.model.get_model_kwargs(resolved_model),
-            "messages": self._serialize_observability_messages(messages),
+            "messages": self._serialize_observability_messages(prepared_messages),
             "tools": tools,
+            "context_budget": context_budget,
         }
+
+    def prepare_messages_for_model(
+        self,
+        *,
+        messages: list[BaseMessage],
+        tool_names: list[str] | None,
+        model_tier: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model_name: str | None = None,
+        small_api_key: str | None = None,
+        small_base_url: str | None = None,
+        small_model_name: str | None = None,
+        context_window_tokens: int | None = None,
+        max_output_tokens: int | None = None,
+    ) -> tuple[list[BaseMessage], dict[str, Any]]:
+        """在调度器最终边界按实际模型能力组装并复算请求。"""
+
+        from agent_service.services.memory.context_builder import ContextBuilder
+
+        resolved_model, _resolved_key, _resolved_base_url, _temperature = self._resolve_model_runtime(
+            model_tier=model_tier,
+            requested_temperature=None,
+            api_key=api_key,
+            base_url=base_url,
+            model_name=model_name,
+            small_api_key=small_api_key,
+            small_base_url=small_base_url,
+            small_model_name=small_model_name,
+        )
+        capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=resolved_model,
+            model_tier=model_tier,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
+        )
+        selected_name_set = set(tool_names or [])
+        selected_tools = [
+            tool
+            for tool in self._get_tool_registry().to_langchain_tools()
+            if tool.name in selected_name_set
+        ]
+        tool_definition_tokens = ContextBuilder.estimate_tool_definition_tokens(
+            selected_tools,
+            model_name=resolved_model,
+        )
+        source_messages = list(messages)
+        system_index = next(
+            (index for index, message in enumerate(source_messages) if isinstance(message, SystemMessage)),
+            None,
+        )
+        if system_index is None:
+            system_message = None
+            remaining_messages = source_messages
+        else:
+            system_message = source_messages[system_index]
+            remaining_messages = [
+                message for index, message in enumerate(source_messages) if index != system_index
+            ]
+        return ContextBuilder.assemble_request_messages(
+            system_message=system_message,
+            messages=remaining_messages,
+            config=self.config,
+            capacity=capacity,
+            tool_definition_tokens=tool_definition_tokens,
+        )
 
     @staticmethod
     def _serialize_observability_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:

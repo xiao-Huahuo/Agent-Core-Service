@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   streamPrompt: vi.fn(),
   fetchTaskSuggestions: vi.fn(),
   fetchChildAgents: vi.fn(),
+  claimChildAgentWakeup: vi.fn(),
   deleteAgentAttachment: vi.fn(),
   listSessions: vi.fn(),
   createSession: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('@/api/agent', () => ({
   streamPrompt: apiMocks.streamPrompt,
   fetchTaskSuggestions: apiMocks.fetchTaskSuggestions,
   fetchChildAgents: apiMocks.fetchChildAgents,
+  claimChildAgentWakeup: apiMocks.claimChildAgentWakeup,
   deleteAgentAttachment: apiMocks.deleteAgentAttachment,
 }))
 
@@ -44,6 +46,7 @@ describe('chat reference history', () => {
     vi.clearAllMocks()
     apiMocks.listSessions.mockResolvedValue([])
     apiMocks.fetchTaskSuggestions.mockResolvedValue({ suggestions: [] })
+    apiMocks.claimChildAgentWakeup.mockResolvedValue({ run_id: 'child-1', claimed: true })
   })
 
   afterEach(() => {
@@ -106,6 +109,31 @@ describe('chat reference history', () => {
     )
   })
 
+  it('creates a missing session only after appending the first user bubble', async () => {
+    const store = useChatStore()
+    apiMocks.createSession.mockImplementation(async () => {
+      expect(store.messages).toMatchObject([{ role: 'user', content: '第一条消息' }])
+      return {
+        session_id: 'session-first-bubble',
+        user_id: 'user-1',
+        session_name: '新对话',
+        created_at: '2026-09-01T00:00:00Z',
+        updated_at: '2026-09-01T00:00:00Z',
+      }
+    })
+    apiMocks.streamPrompt.mockImplementation(async function* () {})
+
+    await store.send('user-1', null, '第一条消息')
+
+    expect(apiMocks.createSession).toHaveBeenCalledTimes(1)
+    expect(apiMocks.streamPrompt).toHaveBeenCalledWith(
+      'user-1',
+      'session-first-bubble',
+      '第一条消息',
+      expect.anything(),
+    )
+  })
+
   it('restores persisted child agent event messages with empty content', async () => {
     const childAgentEvent = {
       event_name: 'child_agent.completed',
@@ -158,6 +186,27 @@ describe('chat reference history', () => {
         messageMetadata: { wakeup: true, child_agent_event: childAgentEvent },
       }),
     )
+  })
+
+  it('claims a terminal child event already rendered by the active SSE stream', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        type: 'child_agent_event',
+        node: 'child_agent',
+        metadata: {
+          child_agent_event: {
+            event_name: 'child_agent.completed',
+            child: { run_id: 'child-sse-1', status: 'completed' },
+          },
+        },
+      }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '并行调查')
+
+    expect(apiMocks.claimChildAgentWakeup).toHaveBeenCalledWith('child-sse-1', 'user-1', 'session-1')
+    expect(store.messages.filter((message) => message.node === 'child_agent')).toHaveLength(1)
   })
 
   it('loads the complete session request without dropping the first user message', async () => {
@@ -240,6 +289,52 @@ describe('chat reference history', () => {
     const assistant = store.messages.find((message) => message.role === 'assistant')
     expect(assistant?.thinking).toBe('先分析再回答')
     expect(assistant?.metadata?.latency).toBeUndefined()
+  })
+
+  it('records how many final characters reconciled a streamed prefix', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield { type: 'delta', node: 'agent', content: '开头' }
+      yield {
+        node: 'agent',
+        content: '开头和完整结尾',
+        metadata: { stream_diagnostics: { reconciled_content_chars: 0 } },
+      }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '继续')
+
+    const assistant = store.messages.find((message) => message.role === 'assistant')
+    expect(assistant?.content).toBe('开头和完整结尾')
+    expect(assistant?.metadata?.frontend_stream_reconciled_chars).toBe(5)
+  })
+
+  it('commits streamed text on the next animation frame instead of a 50ms block', async () => {
+    let releaseStream: (() => void) | undefined
+    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve })
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield { type: 'delta', node: 'agent', content: '逐帧内容' }
+      await streamGate
+    })
+    let frameCallback: FrameRequestCallback | undefined
+    const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frameCallback = callback
+      return 1
+    })
+    const store = useChatStore()
+
+    const sendPromise = store.send('user-1', 'session-1', '继续')
+    for (let index = 0; index < 12; index += 1) await Promise.resolve()
+    const assistant = store.messages.find((message) => message.role === 'assistant')
+    expect(assistant?.content).toBe('')
+    expect(frameCallback).toBeDefined()
+
+    frameCallback?.(performance.now())
+    expect(assistant?.content).toBe('逐帧内容')
+    store.cancelStream()
+    releaseStream?.()
+    await sendPromise
+    frameSpy.mockRestore()
   })
 
   it('accumulates streamed thinking deltas into the assistant message', async () => {
@@ -329,6 +424,20 @@ describe('chat reference history', () => {
       { role: 'user', content: '你好' },
     ])
     expect(store.contextSnapshots[0]?.model_kwargs).toEqual({ protocol: 'legacy_context_messages' })
+  })
+
+  it('preserves the capacity source needed to retire stale 128K session meters', () => {
+    const store = useChatStore()
+
+    store.setContextUsage({
+      current_tokens: 80_000,
+      max_context_tokens: 120_258,
+      trigger_tokens: 96_206,
+      target_tokens: 54_116,
+      capacity_source: 'conservative_fallback',
+    })
+
+    expect(store.contextUsage?.capacity_source).toBe('conservative_fallback')
   })
 
   it('refreshes follow-up suggestions after a streamed turn completes', async () => {

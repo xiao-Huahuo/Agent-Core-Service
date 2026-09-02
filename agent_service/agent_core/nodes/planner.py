@@ -20,8 +20,13 @@ from typing import Any
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from agent_service.agent_core.nodes.base import AgentState
-from agent_service.agent_core.nodes.model_decision import extract_token_usage, get_user_llm_overrides
+from agent_service.agent_core.nodes.model_decision import (
+    extract_token_usage,
+    get_user_llm_overrides,
+    get_user_model_capacity_overrides,
+)
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.core.context_budget import ContextBudget, ModelCapacity
 from agent_service.services.scheduler import (
     FOREGROUND_AGENT_TASK,
     SMALL_MODEL_TIER,
@@ -29,6 +34,7 @@ from agent_service.services.scheduler import (
     get_llm_task_scheduler,
 )
 from agent_service.tools import ToolExecutor
+from agent_service.tools.result_envelope import render_tool_result_context
 from agent_service.tools.runtime_context import get_context_mirror_callback, get_tool_trace_callback
 
 
@@ -138,6 +144,10 @@ class PlannerNode:
         """
 
         api_key, base_url, model_name, small_api_key, small_base_url, small_model_name = get_user_llm_overrides(state)
+        context_window_tokens, max_output_tokens = get_user_model_capacity_overrides(
+            state,
+            model_tier="small",
+        )
         messages = [system_message, user_message]
         context_callback = get_context_mirror_callback()
         if context_callback is not None:
@@ -150,6 +160,8 @@ class PlannerNode:
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
                 small_model_name=small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
                 node="planner",
             ))
         return self.task_scheduler.invoke_chat(
@@ -162,6 +174,8 @@ class PlannerNode:
             small_api_key=small_api_key,
             small_base_url=small_base_url,
             small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
 
     def _build_planning_prompt(
@@ -183,12 +197,41 @@ class PlannerNode:
         covered = existing_plan.get("covered", [])
         if covered:
             parts.append(f"\n当前已覆盖的主题: {', '.join(covered)}")
-        history = self._build_execution_history(state, limit=self.config.limits.agent_planner_history_limit)
+        llm_config = state.get("llm_config") or {}
+        capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=str(
+                llm_config.get("small_model_name")
+                or llm_config.get("model_name")
+                or self.config.model.local_model_name
+            ),
+            model_tier="small",
+            context_window_tokens=(
+                int(llm_config.get("small_model_context_window_tokens") or 0)
+                or int(llm_config.get("model_context_window_tokens") or 0)
+                or None
+            ),
+            max_output_tokens=(
+                int(llm_config.get("small_model_max_output_tokens") or 0)
+                or int(llm_config.get("model_max_output_tokens") or 0)
+                or None
+            ),
+        )
+        history_token_budget = ContextBudget.from_config(
+            config=self.config,
+            capacity=capacity,
+        ).max_single_block_tokens
+        history = self._build_execution_history(
+            state,
+            token_budget=history_token_budget,
+            model_name=capacity.model_name,
+        )
         if history:
             parts.append(f"\n最近探索结果:\n{history}")
         observation_history = self._build_observation_history(
             state,
-            limit=self.config.limits.agent_planner_history_limit,
+            token_budget=history_token_budget,
+            model_name=capacity.model_name,
         )
         if observation_history:
             parts.append(f"\nObservation 决策历史:\n{observation_history}")
@@ -198,7 +241,8 @@ class PlannerNode:
     def _build_execution_history(
         self,
         state: AgentState,
-        limit: int = DEFAULT_BUSINESS_LIMITS.agent_planner_history_limit,
+        token_budget: int,
+        model_name: str | None,
     ) -> str:
         """
         从状态消息中提取最近的工具调用摘要。
@@ -211,21 +255,13 @@ class PlannerNode:
         if not messages:
             return ""
         lines: list[str] = []
-        count = 0
+        used_tokens = 0
         for msg in reversed(messages):
-            if count >= limit:
-                break
             if isinstance(msg, ToolMessage):
-                content = str(getattr(msg, "content", "") or "")
                 name = getattr(msg, "name", "") or ""
                 display = self._lookup_display_name(name) if name else ""
                 label = f"{display}: " if display else ""
-                preview_chars = self.config.limits.agent_planner_history_preview_chars
-                lines.append(
-                    f"- {label}{content[:preview_chars]}"
-                    f"{'...' if len(content) > preview_chars else ''}"
-                )
-                count += 1
+                line = f"- {label}{render_tool_result_context(msg)}"
             elif isinstance(msg, AIMessage):
                 tool_calls = getattr(msg, "tool_calls", []) or []
                 if tool_calls:
@@ -234,15 +270,26 @@ class PlannerNode:
                         for tc in tool_calls if tc.get("name")
                     )
                     if names:
-                        lines.append(f"- [调用工具] {names}")
-                        count += 1
+                        line = f"- [调用工具] {names}"
+                    else:
+                        continue
+                else:
+                    continue
+            else:
+                continue
+            line_tokens = ContextBuilder.estimate_text_tokens(line, model_name=model_name)
+            if used_tokens + line_tokens > token_budget:
+                continue
+            lines.append(line)
+            used_tokens += line_tokens
         lines.reverse()
         return "\n".join(lines)
 
     @staticmethod
     def _build_observation_history(
         state: AgentState,
-        limit: int = DEFAULT_BUSINESS_LIMITS.agent_planner_history_limit,
+        token_budget: int,
+        model_name: str | None,
     ) -> str:
         """从 trace 中提取 observation 的选择历史。"""
 
@@ -255,7 +302,15 @@ class PlannerNode:
             reason = trace.get("reason") or trace.get("human_readable") or ""
             next_action = trace.get("next_action", "")
             lines.append(f"- {decision}: {reason}；下一步: {next_action}")
-        return "\n".join(lines[-limit:])
+        selected: list[str] = []
+        used_tokens = 0
+        for line in reversed(lines):
+            line_tokens = ContextBuilder.estimate_text_tokens(line, model_name=model_name)
+            if used_tokens + line_tokens > token_budget:
+                continue
+            selected.append(line)
+            used_tokens += line_tokens
+        return "\n".join(reversed(selected))
 
     @staticmethod
     def _extract_latest_user_message(state: AgentState) -> str:

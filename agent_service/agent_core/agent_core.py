@@ -307,6 +307,10 @@ class AgentCore(ChildAgentRuntimeMixin, GraphRunnerMixin, SessionRuntimeMixin, M
                 reasoning_content = "".join(str(part) for part in reasoning_content)
             if reasoning_content:
                 metadata["reasoning_content"] = reasoning_content
+            stream_diagnostics = (message.additional_kwargs or {}).get("stream_diagnostics")
+            if isinstance(stream_diagnostics, dict):
+                # 只保存字符计数和布尔诊断，不记录用户正文。
+                metadata["stream_diagnostics"] = stream_diagnostics
             content = AgentCore._sanitize_agent_output(AgentCore._stringify_content(message.content))
             content = AgentCore._drop_unmapped_citation_anchors(content, citation_map)
             content = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
@@ -322,6 +326,9 @@ class AgentCore(ChildAgentRuntimeMixin, GraphRunnerMixin, SessionRuntimeMixin, M
                 metadata_json=metadata,
             )
         if isinstance(message, ToolMessage):
+            tool_result = (message.additional_kwargs or {}).get("tool_result")
+            if isinstance(tool_result, dict):
+                metadata["tool_result"] = tool_result
             return MessageCreate(
                 session_id=session_id,
                 user_id=user_id,

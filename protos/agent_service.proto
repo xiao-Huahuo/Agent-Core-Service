@@ -686,6 +686,10 @@ message LLMConfigSaveRequest {
   string small_api_key = 5;
   string small_base_url = 6;
   string small_model_name = 7;
+  int64 model_context_window_tokens = 8;
+  int64 model_max_output_tokens = 9;
+  int64 small_model_context_window_tokens = 10;
+  int64 small_model_max_output_tokens = 11;
 }
 
 message LLMConfigResponse {
@@ -705,6 +709,10 @@ message LLMConfigResponse {
   string effective_model_name = 14;
   string effective_model_source = 15;
   string effective_small_model_source = 16;
+  int64 model_context_window_tokens = 17;
+  int64 model_max_output_tokens = 18;
+  int64 small_model_context_window_tokens = 19;
+  int64 small_model_max_output_tokens = 20;
 }
 
 message LLMConfigPresetSaveRequest {

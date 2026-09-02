@@ -15,11 +15,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Sequence
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.core.context_budget import capacity_overrides_from_mapping
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
 from agent_service.tools import ToolExecutor
@@ -109,6 +110,16 @@ def _normalize_optional_str(value: Any) -> str | None:
     return text or None
 
 
+def get_user_model_capacity_overrides(
+    state: AgentState,
+    *,
+    model_tier: str,
+) -> tuple[int | None, int | None]:
+    """读取当前用户对主模型或小模型显式保存的容量覆盖。"""
+
+    return capacity_overrides_from_mapping(state.get("llm_config"), model_tier=model_tier)
+
+
 def extract_token_usage(message: Any) -> dict[str, int]:
     """从 LangChain message 中标准化提取模型真实 token 用量。"""
 
@@ -194,6 +205,11 @@ class ModelDecisionNode:
 
             active_tool_names = [name for name in active_tool_names if name not in MEMORY_TOOL_NAMES]
 
+        if self._current_turn_tool_call_count(state.get("messages", [])) >= self.config.limits.agent_max_tool_calls_per_turn:
+            # 单轮累计预算耗尽后解绑工具，让模型基于已有结果生成最终回答，避免
+            # 同一个空结果被无限重试并持续写入历史。
+            active_tool_names = []
+
         # 每轮全量绑定所有可用工具(已剔除禁用工具),保证任意工具随时可直接调用。
         system_content = self.config.prompts.agent_system_prompt
 
@@ -263,6 +279,10 @@ class ModelDecisionNode:
             user_small_base_url,
             user_small_model_name,
         ) = self._get_user_model_overrides(state)
+        context_window_tokens, max_output_tokens = get_user_model_capacity_overrides(
+            state,
+            model_tier="large",
+        )
         llm_messages = self._prepare_messages_for_llm(
             system_message,
             state["messages"],
@@ -279,6 +299,8 @@ class ModelDecisionNode:
                 small_api_key=user_small_api_key,
                 small_base_url=user_small_base_url,
                 small_model_name=user_small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
                 node="agent",
             ))
         response = self.task_scheduler.invoke_chat(
@@ -291,6 +313,8 @@ class ModelDecisionNode:
             small_api_key=user_small_api_key,
             small_base_url=user_small_base_url,
             small_model_name=user_small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
         tool_calls = getattr(response, "tool_calls", []) or []
         token_usage = extract_token_usage(response)
@@ -308,6 +332,21 @@ class ModelDecisionNode:
                 }
             ],
         }
+
+    @staticmethod
+    def _current_turn_tool_call_count(messages: Sequence[BaseMessage]) -> int:
+        """统计最近一条用户消息之后已经产生的工具调用数量。"""
+
+        current_turn: Sequence[BaseMessage] = messages
+        for index in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[index], HumanMessage):
+                current_turn = messages[index + 1:]
+                break
+        return sum(
+            len(getattr(message, "tool_calls", []) or [])
+            for message in current_turn
+            if isinstance(message, AIMessage)
+        )
 
     @staticmethod
     def _build_task_list_prompt(task_list: dict[str, Any] | None) -> str:
@@ -422,6 +461,10 @@ class ModelDecisionNode:
             user_small_base_url,
             user_small_model_name,
         ) = self._get_user_model_overrides(state)
+        context_window_tokens, max_output_tokens = get_user_model_capacity_overrides(
+            state,
+            model_tier="large",
+        )
         if context_callback is not None:
             context_callback(self.task_scheduler.build_observability_snapshot(
                 messages=llm_messages,
@@ -432,6 +475,8 @@ class ModelDecisionNode:
                 small_api_key=user_small_api_key,
                 small_base_url=user_small_base_url,
                 small_model_name=user_small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
                 node="agent",
             ))
         if trace_callback is not None:
@@ -461,6 +506,8 @@ class ModelDecisionNode:
             small_api_key=user_small_api_key,
             small_base_url=user_small_base_url,
             small_model_name=user_small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         ):
             is_complete = chunk.get("status") == "complete"
             if not is_complete:
@@ -529,80 +576,15 @@ class ModelDecisionNode:
         """
         压缩工具返回内容后再送入模型,避免文件/搜索结果撑爆上下文。
 
-        保留本轮内所有消息以保证 tool_call → tool_message 顺序完整,
-        工具返回内容由 _compact_tool_message 截断(保留所有消息,仅压缩内容)。
+        保留本轮内所有消息以保证 tool_call → tool_message 顺序完整；
+        最终模型可见表示由调度器统一按 ContextBudget 组装。
         """
 
         # 图循环中的消息可能经过压缩或恢复；在真正发给模型前再次保证
         # 每条 ToolMessage 都有对应且位于其前方的 assistant tool_call。
+        del limits
         filtered = ContextBuilder._filter_orphaned_tool_messages(list(messages))
-
-        tool_seen_from_tail = 0
-        prepared_tail: list[BaseMessage] = []
-        for message in reversed(filtered):
-            if isinstance(message, ToolMessage):
-                tool_seen_from_tail += 1
-                max_chars = ModelDecisionNode._tool_message_max_chars(
-                    message,
-                    tool_seen_from_tail=tool_seen_from_tail,
-                    limits=limits,
-                )
-                prepared_tail.append(ModelDecisionNode._compact_tool_message(message, max_chars=max_chars))
-            else:
-                prepared_tail.append(message)
-        prepared_tail.reverse()
-        return [system_message, *prepared_tail]
-
-    @staticmethod
-    def _tool_message_max_chars(
-        message: ToolMessage,
-        *,
-        tool_seen_from_tail: int,
-        limits: AgentConfig.BusinessLimitsConfig = DEFAULT_BUSINESS_LIMITS,
-    ) -> int:
-        """Return a compression budget tuned for the tool result type."""
-
-        tool_name = str(getattr(message, "name", "") or "")
-        if tool_name == "list_available_tools":
-            # 工具清单本身就是供模型读取的内容,不随位置衰减。
-            return limits.agent_tool_registry_result_chars
-        if tool_seen_from_tail <= limits.agent_tool_recent_full_result_count and tool_name == "read_knowledge_file":
-            return limits.agent_tool_large_result_chars
-        if tool_seen_from_tail <= limits.agent_tool_recent_full_result_count and tool_name in {
-            "search_knowledge_graph_nodes",
-            "find_knowledge_graph_paths",
-            "get_smart_form",
-            "export_smart_form",
-            "get_component",
-            "get_custom_skill",
-        }:
-            return limits.agent_tool_large_result_chars
-        if tool_seen_from_tail <= limits.agent_tool_recent_full_result_count and tool_name == "run_terminal_command":
-            # Directory listings and statistics need enough context to avoid redundant follow-up commands.
-            return limits.agent_tool_registry_result_chars
-        return (
-            limits.agent_tool_recent_result_chars
-            if tool_seen_from_tail <= limits.agent_tool_recent_result_count
-            else limits.agent_tool_old_result_chars
-        )
-
-    @staticmethod
-    def _compact_tool_message(message: ToolMessage, *, max_chars: int) -> ToolMessage:
-        """保留 tool_call_id,仅压缩工具返回内容。"""
-
-        content = str(getattr(message, "content", "") or "")
-        if len(content) <= max_chars:
-            return message
-        compacted = (
-            content[:max_chars]
-            + f"\n\n[工具返回内容已压缩: 原始长度 {len(content)} 字符, 当前仅保留前 {max_chars} 字符。"
-            "请基于已保留内容继续; 若该工具明确提供分块、分页或检索参数, 才使用对应参数继续读取。]"
-        )
-        return ToolMessage(
-            content=compacted,
-            tool_call_id=message.tool_call_id,
-            name=getattr(message, "name", None),
-        )
+        return [system_message, *filtered]
 
     def _get_user_model_overrides(
         self,

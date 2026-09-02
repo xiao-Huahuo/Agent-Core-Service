@@ -33,6 +33,7 @@ from agent_service.agent_core.runtime.shared import (
 )
 from agent_service.agent_core.runtime.token_usage import extract_token_usage
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.core.context_budget import ModelCapacity
 from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
@@ -347,6 +348,15 @@ class GraphRunnerMixin:
                 model_name=str(runtime_llm_config.get("model_name") or self.config.model.model_name or "") or None,
             ),
             additional_context_tokens=runtime_system_tokens,
+            model_context_window_tokens=int(runtime_llm_config.get("model_context_window_tokens") or 0) or None,
+            model_max_output_tokens=int(runtime_llm_config.get("model_max_output_tokens") or 0) or None,
+        )
+        runtime_capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=str(runtime_llm_config.get("model_name") or self.config.model.local_model_name),
+            model_tier="large",
+            context_window_tokens=int(runtime_llm_config.get("model_context_window_tokens") or 0) or None,
+            max_output_tokens=int(runtime_llm_config.get("model_max_output_tokens") or 0) or None,
         )
         if effective_mode == AGENT_LOOP_SIMPLE and ContextBuilder.should_compress(
             messages,
@@ -359,6 +369,7 @@ class GraphRunnerMixin:
                     model_name=str(runtime_llm_config.get("model_name") or self.config.model.model_name or "") or None,
                 )
             ),
+            capacity=runtime_capacity,
         ):
             effective_mode = AGENT_LOOP_REACT
         mark_latency("context_build_ms", context_started_at)
@@ -677,12 +688,24 @@ class GraphRunnerMixin:
             context_snapshots.append(normalized_snapshot)
             messages = normalized_snapshot.get("messages", [])
             model_name = str((llm_config or {}).get("model_name") or self.config.model.model_name or "") or None
-            usage = ContextBuilder.context_usage_from_serialized(
-                messages,
-                config=self.config,
-                model_name=model_name,
-                extra_tokens=ContextBuilder.estimate_tool_definition_tokens(self.tools, model_name=model_name),
-            )
+            budget = normalized_snapshot.get("context_budget")
+            if isinstance(budget, dict):
+                usage = {
+                    "current_tokens": int(budget.get("final_input_tokens", 0)),
+                    "max_context_tokens": int(budget.get("effective_window_tokens", 0)),
+                    "input_budget_tokens": int(budget.get("input_budget_tokens", 0)),
+                    "trigger_tokens": int(budget.get("compression_trigger_tokens", 0)),
+                    "target_tokens": int(budget.get("compression_target_tokens", 0)),
+                    "capacity_source": budget.get("capacity_source", ""),
+                    "policy_version": budget.get("policy_version", ""),
+                }
+            else:
+                usage = ContextBuilder.context_usage_from_serialized(
+                    messages,
+                    config=self.config,
+                    model_name=model_name,
+                    extra_tokens=ContextBuilder.estimate_tool_definition_tokens(self.tools, model_name=model_name),
+                )
             self._persist_session_state_value(session_id, "context_usage", usage)
             self._persist_session_state_value(session_id, "context_snapshots", context_snapshots)
             token_queue.put({
@@ -726,6 +749,7 @@ class GraphRunnerMixin:
                 change_service=self.change_service,
                 skill_service=self.skill_service,
                 settings_service=self.settings_service,
+                message_service=message_service,
                 database_engine=getattr(self.settings_service, "engine", None),
                 citation_map=_citation_map,
                 agent_access_mode=effective_access_mode,
@@ -746,6 +770,7 @@ class GraphRunnerMixin:
                     if not allow_child_spawn
                     else lambda **kwargs: self._wait_child_agents_from_runtime(
                         parent_run_id=effective_run_id,
+                        session_id=session_id,
                         **kwargs,
                     )
                 ),

@@ -466,7 +466,7 @@ async def list_messages(
 ) -> list[dict[str, Any]]:
     """获取指定会话的消息历史。"""
     ms = _require_message_service()
-    messages = ms.list_session_messages(user_id=user_id, session_id=session_id, limit=limit)
+    messages = ms.list_chat_messages(user_id=user_id, session_id=session_id, limit=limit)
     return [
         {
             "message_id": m.message_id,

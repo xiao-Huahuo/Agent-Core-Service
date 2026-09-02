@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent_service.agent_core.nodes.model_decision import get_user_llm_overrides
 from agent_service.core.agent_config import AgentConfig
+from agent_service.core.context_budget import ContextBudget, ModelCapacity
 from agent_service.schemas.structured_generation import (
     StructuredGenerationField,
     StructuredGenerationFieldResult,
@@ -63,21 +64,33 @@ class StructuredGenerationService:
                 ],
                 raw_output="",
             )
-        messages = self._build_messages(request)
-        try:
-            raw_output = self._invoke_model(messages, request.user_id)
-            parsed = parse_json_object(raw_output)
-        except Exception as exc:  # noqa: BLE001
+        parsed_chunks: list[dict[str, Any]] = []
+        raw_outputs: list[str] = []
+        errors: list[str] = []
+        for chunk_index, source_chunk in enumerate(self._source_chunks(request)):
+            messages = self._build_messages(request, source_content=source_chunk, chunk_index=chunk_index)
+            try:
+                raw_output = self._invoke_model(messages, request.user_id)
+                parsed_chunks.append(parse_json_object(raw_output))
+                raw_outputs.append(raw_output)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+        if not parsed_chunks:
             return StructuredGenerationResponse(
                 results=[
-                    StructuredGenerationFieldResult(field_id=field.id, status="failed", error=str(exc))
+                    StructuredGenerationFieldResult(
+                        field_id=field.id,
+                        status="failed",
+                        error="；".join(errors) or "模型未返回有效字段",
+                    )
                     for field in request.fields
                 ],
-                raw_output=locals().get("raw_output", ""),
+                raw_output="\n\n".join(raw_outputs),
             )
+        parsed = self._merge_chunk_fields(request.fields, parsed_chunks)
         return StructuredGenerationResponse(
             results=[self._validate_field_result(field, parsed) for field in request.fields],
-            raw_output=raw_output,
+            raw_output="\n\n".join(raw_outputs),
         )
 
     def _invoke_model(self, messages: list[Any], user_id: str) -> str:
@@ -97,6 +110,21 @@ class StructuredGenerationService:
                 {"user_id": user_id},
                 self.settings_service,
             )
+            llm_config = (
+                self.settings_service.get_llm_config(user_id=user_id)
+                if self.settings_service is not None
+                else {}
+            )
+            context_window_tokens = (
+                int(llm_config.get("small_model_context_window_tokens") or 0)
+                or int(llm_config.get("model_context_window_tokens") or 0)
+                or None
+            )
+            max_output_tokens = (
+                int(llm_config.get("small_model_max_output_tokens") or 0)
+                or int(llm_config.get("model_max_output_tokens") or 0)
+                or None
+            )
             response = self.task_scheduler.invoke_chat(
                 task_type=FOREGROUND_AGENT_TASK,
                 messages=messages,
@@ -109,6 +137,8 @@ class StructuredGenerationService:
                 small_api_key=user_small_api_key,
                 small_base_url=user_small_base_url,
                 small_model_name=user_small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
             )
         content = getattr(response, "content", response)
         if isinstance(content, str):
@@ -121,7 +151,13 @@ class StructuredGenerationService:
             raise ValueError("模型未返回内容")
         return raw
 
-    def _build_messages(self, request: StructuredGenerationRequest) -> list[Any]:
+    def _build_messages(
+        self,
+        request: StructuredGenerationRequest,
+        *,
+        source_content: str | None = None,
+        chunk_index: int = 0,
+    ) -> list[Any]:
         """构造通用结构化字段生成提示。"""
 
         fields = [
@@ -139,12 +175,72 @@ class StructuredGenerationService:
         user = "\n".join([
             f"来源类型: {request.source.kind}",
             f"语言: {request.options.language}",
+            f"来源分块: {chunk_index + 1}",
             "字段定义:",
             json.dumps(fields, ensure_ascii=False, indent=2),
             "上下文:",
-            request.source.content[:self.config.limits.structured_prompt_source_chars],
+            request.source.content if source_content is None else source_content,
         ])
         return [SystemMessage(content=system), HumanMessage(content=user)]
+
+    def _source_chunks(self, request: StructuredGenerationRequest) -> list[str]:
+        """按小模型动态单块预算完整切分来源正文。"""
+
+        llm_config = (
+            self.settings_service.get_llm_config(user_id=request.user_id)
+            if self.settings_service is not None
+            else {}
+        )
+        model_name = str(
+            llm_config.get("effective_small_model_name")
+            or llm_config.get("small_model_name")
+            or llm_config.get("model_name")
+            or self.config.model.local_model_name
+        )
+        capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=model_name,
+            model_tier=SMALL_MODEL_TIER,
+            context_window_tokens=(
+                int(llm_config.get("small_model_context_window_tokens") or 0)
+                or int(llm_config.get("model_context_window_tokens") or 0)
+                or None
+            ),
+            max_output_tokens=(
+                int(llm_config.get("small_model_max_output_tokens") or 0)
+                or int(llm_config.get("model_max_output_tokens") or 0)
+                or None
+            ),
+        )
+        budget = ContextBudget.from_config(config=self.config, capacity=capacity)
+        from agent_service.services.memory.context_builder import ContextBuilder
+
+        encoding = ContextBuilder._encoding_for_model(model_name)
+        tokens = encoding.encode(request.source.content)
+        chunk_tokens = max(budget.max_single_block_tokens, 1)
+        return [
+            encoding.decode(tokens[start:start + chunk_tokens])
+            for start in range(0, len(tokens), chunk_tokens)
+        ] or [""]
+
+    @staticmethod
+    def _merge_chunk_fields(
+        fields: list[StructuredGenerationField],
+        payloads: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """按字段合并所有来源块中的首个非空有效候选。"""
+
+        marker = object()
+        merged: list[dict[str, Any]] = []
+        for field in fields:
+            value: Any = ""
+            for payload in payloads:
+                candidate = extract_field_value(payload, field.id, marker)
+                if candidate is not marker and normalize_value(candidate):
+                    value = candidate
+                    break
+            merged.append({"id": field.id, "value": value})
+        return {"fields": merged}
 
     def _validate_field_result(self, field: StructuredGenerationField, payload: dict[str, Any]) -> StructuredGenerationFieldResult:
         """从多种 JSON 形态中取出字段值并做字段级校验。"""

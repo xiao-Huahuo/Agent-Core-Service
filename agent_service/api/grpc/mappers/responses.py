@@ -225,6 +225,10 @@ def _llm_config_to_response(payload: dict[str, Any]) -> LLMConfigResponse:
         effective_model_name=str(payload.get("effective_model_name", "")),
         effective_model_source=str(payload.get("effective_model_source", "")),
         effective_small_model_source=str(payload.get("effective_small_model_source", "")),
+        model_context_window_tokens=int(payload.get("model_context_window_tokens", 0)),
+        model_max_output_tokens=int(payload.get("model_max_output_tokens", 0)),
+        small_model_context_window_tokens=int(payload.get("small_model_context_window_tokens", 0)),
+        small_model_max_output_tokens=int(payload.get("small_model_max_output_tokens", 0)),
     )
 def _llm_config_preset_to_response(payload: dict[str, Any]) -> LLMConfigPresetResponse:
     """将已保存 LLM 配置字典转换为 gRPC 响应。"""

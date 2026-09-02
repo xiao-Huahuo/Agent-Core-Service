@@ -181,15 +181,54 @@ def read_knowledge_file(path: str) -> str:
         adopted_by_default=True,
     )
     prefix = f"Citation ID: [{citation_id}]\nSource: {source_uri}\n\n"
-    max_chars = runtime.config.limits.tool_markdown_projection_max_chars
-    if len(content) <= max_chars:
-        return prefix + content
-    return (
-        prefix
-        + content[:max_chars]
-        + f"\n\n[Markdown 投影内容已截断: 已返回前 {max_chars} 字符, 原文共 {len(content)} 字符。"
-        "如需后续部分,请更精确地说明要查看的章节或关键词。]"
-    )
+    return prefix + content
+
+
+def read_session_attachment(
+    content_ref: str,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    cursor: int | None = None,
+) -> str:
+    """按 attachment:// 引用读取当前会话上传附件的解析正文。"""
+
+    from pathlib import Path
+
+    from sqlmodel import Session
+
+    from agent_service.models.attachment import SessionAttachmentRecord
+
+    runtime = get_tool_runtime()
+    prefix = "attachment://"
+    if not content_ref.startswith(prefix):
+        return "读取失败: content_ref 必须使用 attachment:// 引用。"
+    attachment_id = content_ref.removeprefix(prefix).strip()
+    if not attachment_id or runtime.database_engine is None:
+        return "读取失败: 附件引用无效或数据库不可用。"
+    with Session(runtime.database_engine) as db_session:
+        record = db_session.get(SessionAttachmentRecord, attachment_id)
+    if record is None or record.user_id != runtime.user_id or record.session_id != runtime.session_id:
+        return "读取失败: 当前会话不存在对应附件。"
+    text_path = Path(record.text_path or "")
+    if not text_path.is_file():
+        return "读取失败: 附件尚无可读取的解析正文。"
+    lines = text_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    start = max(int(cursor if cursor is not None else start_line or 0), 0)
+    default_lines = runtime.config.limits.terminal_read_default_lines
+    max_lines = runtime.config.limits.terminal_read_max_lines
+    requested_end = int(end_line) if end_line is not None else start + default_lines
+    end = min(max(requested_end, start), start + max_lines, len(lines))
+    next_cursor = end if end < len(lines) else None
+    return json.dumps({
+        "content_ref": content_ref,
+        "filename": record.filename,
+        "start_line": start,
+        "end_line": end,
+        "total_lines": len(lines),
+        "next_cursor": next_cursor,
+        "complete": next_cursor is None,
+        "content": "\n".join(lines[start:end]),
+    }, ensure_ascii=False, indent=2)
 def write_knowledge_file(path: str, content: str) -> str:
     """
     在知识库中创建或覆盖一个文本文件。
@@ -527,6 +566,7 @@ def understand_image(attachment: str = "", prompt: str = "") -> str:
             image_path=image_path,
             ocr_text=ocr_text,
             prompt=prompt,
+            content_ref=f"attachment://{record.attachment_id}",
         )
     except Exception as exc:
         return f"本地识图失败: {type(exc).__name__}: {exc}"

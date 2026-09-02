@@ -239,6 +239,11 @@ class AgentConfig:
         local_model_name: 未配置远程大模型时使用的 CPU 本地 Qwen 仓库名称。
         local_model_max_new_tokens: 本地 Qwen 普通文本与工具调用的最大生成 token 数。
         local_model_vision_max_new_tokens: 本地 Qwen 单次图片理解的最大生成 token 数。
+        model_context_window_tokens: 主模型显式上下文能力；0 表示按模型表或 100 万服务默认值解析。
+        model_max_output_tokens: 主模型显式最大输出能力；0 表示按模型表或保守值解析。
+        small_model_context_window_tokens: 小模型显式上下文能力；0 表示继承主模型或 100 万服务默认值。
+        small_model_max_output_tokens: 小模型显式最大输出能力；0 表示按模型表或保守值解析。
+        model_capabilities: 按模型名登记的上下文窗口与最大输出能力表。
         temperature: 模型采样温度。
         timeout_seconds: 模型请求超时时间,单位为秒。
         streaming_sanitize_min_chars: 流式输出 JSON 检测最低字符数,低于此值跳过 JSON 语法检查。
@@ -259,6 +264,11 @@ class AgentConfig:
         local_model_name: str = "Qwen/Qwen3.5-2B"
         local_model_max_new_tokens: int = 256
         local_model_vision_max_new_tokens: int = 128
+        model_context_window_tokens: int = 0
+        model_max_output_tokens: int = 0
+        small_model_context_window_tokens: int = 0
+        small_model_max_output_tokens: int = 0
+        model_capabilities: dict[str, dict[str, int]] = field(default_factory=dict)
         temperature: float = 0.0
         timeout_seconds: int = 240
         streaming_sanitize_min_chars: int = 20
@@ -360,7 +370,7 @@ class AgentConfig:
         """
 
         agent_system_prompt: str = (
-            "你是 MetaWeave 主 Agent。你的职责是准确理解用户目标，结合当前会话、可用工具、"
+            "你是 MetaWeave Agent。你的职责是准确理解用户目标，结合当前会话、可用工具、"
             "长期记忆和知识资源，把请求推进到真实、可核验的结果，而不只是给出泛泛建议。\n\n"
             "## 任务理解\n"
             "- 以用户当前请求和明确约束为任务目标，以本轮注入的系统规则、Task List、Skill 和运行状态为执行约束。\n"
@@ -538,6 +548,11 @@ class AgentConfig:
         max_context_messages: 旧版固定消息窗口兼容配置;当前 token 预算窗口不再使用。
         summary_trigger_tokens: 旧版固定压缩阈值兼容配置;当前按窗口比例计算触发线。
         context_output_reserve_tokens: 为模型本轮输出预留的 token 数量。
+        context_unknown_output_fallback_tokens: 未知模型保守最大输出 token。
+        context_output_reserve_ratio: 输出预算占有效窗口的默认比例。
+        context_safety_margin_ratio: tokenizer 和协议开销安全边际比例。
+        context_max_single_block_ratio: 单个弹性候选组占输入预算的软上限比例。
+        context_budget_policy_version: Debug 与迁移使用的预算策略版本。
         context_compression_trigger_ratio: 工作上下文达到有效窗口的该比例时触发同步压缩。
         context_compression_target_ratio: 压缩后工作上下文应降到有效窗口的该比例以内。
         chunk_size: 知识切片目标大小。
@@ -558,6 +573,11 @@ class AgentConfig:
         max_context_messages: int = 20
         summary_trigger_tokens: int = 800000
         context_output_reserve_tokens: int = 65536
+        context_unknown_output_fallback_tokens: int = 8192
+        context_output_reserve_ratio: float = 0.065
+        context_safety_margin_ratio: float = 0.02
+        context_max_single_block_ratio: float = 0.20
+        context_budget_policy_version: str = "dynamic-v1"
         context_compression_trigger_ratio: float = 0.8
         context_compression_target_ratio: float = 0.45
         chunk_size: int = 512
@@ -873,7 +893,6 @@ class AgentConfig:
         component_source_max_length: 组件源码在服务层允许保存的最大字符数。
         component_schema_source_max_length: 组件源码 DTO 允许接收的最大字符数。
         structured_source_max_length: 结构化生成输入源允许接收的最大字符数。
-        structured_prompt_source_chars: 发送给结构化生成模型的输入源最大字符数。
         structured_fields_max_count: 单次结构化生成请求允许的最大字段数。
         activity_heatmap_min_days: 活跃热力图允许查询的最少天数。
         activity_heatmap_max_days: 活跃热力图允许查询和默认覆盖的最多天数。
@@ -902,7 +921,6 @@ class AgentConfig:
         graph_path_default_depth: 图谱路径搜索默认最大深度。
         graph_path_max_depth: 图谱路径搜索允许的最大深度。
         graph_batch_max_chars: 单批图谱抽取文本的最大字符数。
-        graph_single_section_max_chars: 单章节图谱抽取发送给模型的最大字符数。
         graph_batch_max_sections: 单批图谱抽取允许合并的最大章节数。
         graph_dedup_max_cluster_size: 图谱聚类去重允许处理的最大簇大小。
         knowledge_content_search_limit: 知识文件内容搜索默认返回条数。
@@ -919,10 +937,7 @@ class AgentConfig:
         retrieval_freshness_half_life_days: 召回结果时效衰减使用的天数尺度。
         table_max_rows: 多模态表格清洗允许读取的最大数据行数。
         scanned_pdf_text_threshold: 判断 PDF 页面需要 OCR 的最少文本字符数。
-        attachment_context_max_chars: 单次注入模型的全部附件上下文最大字符数。
-        attachment_single_max_chars: 单个附件注入模型的最大字符数。
         attachment_preview_chars: 附件文本预览最大字符数。
-        local_vision_ocr_context_chars: 本地识图请求注入 OCR 文本的最大字符数。
         attachment_name_collision_attempts: 附件重名时允许尝试的最大编号数。
         task_suggestion_default_limit: 任务建议读取历史消息的默认条数。
         task_suggestion_min_limit: 任务建议读取历史消息的最少条数。
@@ -942,23 +957,14 @@ class AgentConfig:
         agent_plan_prompt_min_chars: 自动切换规划模式的长输入字符阈值。
         agent_sse_heartbeat_seconds: Agent SSE 流心跳发送间隔秒数。
         agent_sse_queue_poll_seconds: Agent SSE 事件队列轮询间隔秒数。
-        agent_observation_tool_result_chars: 观察节点注入单条工具结果的最大字符数。
         agent_observation_reason_chars: 观察节点原因文本最大字符数。
         agent_observation_next_action_chars: 观察节点后续动作文本最大字符数。
-        agent_planner_history_limit: 规划节点保留的执行与观察历史条数。
-        agent_planner_history_preview_chars: 规划节点单条历史预览最大字符数。
         agent_planner_covered_limit: 规划节点保留的已覆盖事项数量。
         agent_planner_suggested_limit: 规划节点保留的建议事项数量。
         agent_planner_subquestion_limit: 规划节点允许的子问题数量。
         agent_planner_hint_chars: 规划节点提示文本最大字符数。
         agent_tool_summary_chars: 工具调用摘要最大字符数。
         agent_tool_argument_preview_chars: 工具参数预览最大字符数。
-        agent_tool_recent_full_result_count: 最近工具结果使用完整内容预算的条数。
-        agent_tool_recent_result_count: 工具结果使用中等内容预算的条数。
-        agent_tool_registry_result_chars: 工具清单和终端结果的最大字符预算。
-        agent_tool_large_result_chars: 知识文件、图谱和表单结果的最大字符预算。
-        agent_tool_recent_result_chars: 最近普通工具结果的最大字符预算。
-        agent_tool_old_result_chars: 较早普通工具结果的最大字符预算。
         agent_event_content_preview_chars: Agent 调试事件中消息正文预览的最大字符数。
         citation_source_scan_lines: 引用匹配从来源正文开头扫描的最大行数。
         citation_term_min_chars: 引用匹配关键词允许参与匹配的最少字符数。
@@ -1002,15 +1008,11 @@ class AgentConfig:
         web_search_candidate_multiplier: Web 文本搜索为去重预取候选结果的倍数。
         web_search_min_snippet_chars: Web 搜索结果摘要允许保留的最少字符数。
         web_fetch_timeout_seconds: 搜索结果正文抓取超时秒数。
-        web_fetch_max_chars: 搜索结果单页正文最大字符数。
         web_fetch_min_chars: 抓取正文过短时回退搜索摘要的字符阈值。
         download_timeout_seconds: 文件下载请求超时秒数。
-        tool_markdown_projection_max_chars: 工具返回 Markdown 投影的最大字符数。
         tool_attachment_match_preview_count: 附件匹配歧义提示展示的最大候选数。
         tool_registry_description_chars: 工具清单中单项描述的最大字符数。
-        tool_memory_mutation_result_chars: 长期记忆增删工具回执正文的最大字符数。
         tool_job_registry_max_entries: 内存工具任务注册表保留的最大条目数。
-        skill_body_max_chars: Skill 正文参与路由索引的最大字符数。
         skill_router_max_skills: Skill 路由单次选择的最大 Skill 数量。
         skill_router_candidate_limit: Skill 路由参与排序的最大候选数量。
         skill_index_description_max_chars: Skill 索引描述最大字符数。
@@ -1044,7 +1046,6 @@ class AgentConfig:
         max_web_search_results: Web 搜索允许的最大结果数。
         memory_list_default_limit: 长期记忆列表默认返回条数。
         memory_search_default_limit: 长期记忆全文搜索默认返回条数。
-        memory_delete_scan_limit: 工具按内容删除长期记忆时的最大扫描条数。
         recall_history_limit: 召回详情读取的最大历史消息数。
         safety_block_confidence_threshold: 意图审核真正拦截请求的最低置信度。
         safety_intent_timeout_seconds: 意图审核小模型调用超时秒数。
@@ -1083,7 +1084,6 @@ class AgentConfig:
         component_source_max_length: int = 250000
         component_schema_source_max_length: int = 2000000
         structured_source_max_length: int = 200000
-        structured_prompt_source_chars: int = 60000
         structured_fields_max_count: int = 64
         activity_heatmap_min_days: int = 7
         activity_heatmap_max_days: int = 371
@@ -1119,7 +1119,6 @@ class AgentConfig:
         graph_path_default_depth: int = 6
         graph_path_max_depth: int = 12
         graph_batch_max_chars: int = 12000
-        graph_single_section_max_chars: int = 6000
         graph_batch_max_sections: int = 4
         graph_dedup_max_cluster_size: int = 500
         knowledge_content_search_limit: int = 20
@@ -1136,10 +1135,7 @@ class AgentConfig:
         retrieval_freshness_half_life_days: float = 30.0
         table_max_rows: int = 80
         scanned_pdf_text_threshold: int = 20
-        attachment_context_max_chars: int = 16000
-        attachment_single_max_chars: int = 8000
         attachment_preview_chars: int = 500
-        local_vision_ocr_context_chars: int = 6000
         attachment_name_collision_attempts: int = 1000
         task_suggestion_default_limit: int = 50
         task_suggestion_min_limit: int = 4
@@ -1159,23 +1155,14 @@ class AgentConfig:
         agent_plan_prompt_min_chars: int = 80
         agent_sse_heartbeat_seconds: float = 3.0
         agent_sse_queue_poll_seconds: float = 1.0
-        agent_observation_tool_result_chars: int = 2000
         agent_observation_reason_chars: int = 80
         agent_observation_next_action_chars: int = 120
-        agent_planner_history_limit: int = 6
-        agent_planner_history_preview_chars: int = 200
         agent_planner_covered_limit: int = 8
         agent_planner_suggested_limit: int = 8
         agent_planner_subquestion_limit: int = 5
         agent_planner_hint_chars: int = 120
         agent_tool_summary_chars: int = 200
         agent_tool_argument_preview_chars: int = 80
-        agent_tool_recent_full_result_count: int = 4
-        agent_tool_recent_result_count: int = 8
-        agent_tool_registry_result_chars: int = 6000
-        agent_tool_large_result_chars: int = 12000
-        agent_tool_recent_result_chars: int = 900
-        agent_tool_old_result_chars: int = 240
         agent_event_content_preview_chars: int = 500
         citation_source_scan_lines: int = 12
         citation_term_min_chars: int = 3
@@ -1219,15 +1206,11 @@ class AgentConfig:
         web_search_candidate_multiplier: int = 2
         web_search_min_snippet_chars: int = 10
         web_fetch_timeout_seconds: int = 15
-        web_fetch_max_chars: int = 3000
         web_fetch_min_chars: int = 50
         download_timeout_seconds: int = 60
-        tool_markdown_projection_max_chars: int = 6000
         tool_attachment_match_preview_count: int = 8
         tool_registry_description_chars: int = 100
-        tool_memory_mutation_result_chars: int = 200
         tool_job_registry_max_entries: int = 200
-        skill_body_max_chars: int = 8000
         skill_router_max_skills: int = 3
         skill_router_candidate_limit: int = 20
         skill_index_description_max_chars: int = 240
@@ -1261,7 +1244,6 @@ class AgentConfig:
         max_web_search_results: int = 100
         memory_list_default_limit: int = 50
         memory_search_default_limit: int = 20
-        memory_delete_scan_limit: int = 200
         recall_history_limit: int = 200
         safety_block_confidence_threshold: float = 0.7
         safety_intent_timeout_seconds: float = 10.0
@@ -1529,6 +1511,11 @@ class AgentConfig:
             "AGENT_LOCAL_MODEL_NAME": ("model", "local_model_name", str),
             "AGENT_LOCAL_MODEL_MAX_NEW_TOKENS": ("model", "local_model_max_new_tokens", int),
             "AGENT_LOCAL_MODEL_VISION_MAX_NEW_TOKENS": ("model", "local_model_vision_max_new_tokens", int),
+            "AGENT_MODEL_CONTEXT_WINDOW_TOKENS": ("model", "model_context_window_tokens", int),
+            "AGENT_MODEL_MAX_OUTPUT_TOKENS": ("model", "model_max_output_tokens", int),
+            "AGENT_SMALL_MODEL_CONTEXT_WINDOW_TOKENS": ("model", "small_model_context_window_tokens", int),
+            "AGENT_SMALL_MODEL_MAX_OUTPUT_TOKENS": ("model", "small_model_max_output_tokens", int),
+            "AGENT_MODEL_CAPABILITIES_JSON": ("model", "model_capabilities", AgentConfig._parse_json),
             "AGENT_MODEL_TEMPERATURE": ("model", "temperature", float),
             "AGENT_MODEL_TIMEOUT_SECONDS": ("model", "timeout_seconds", int),
             "AGENT_STREAMING_SANITIZE_MIN_CHARS": ("model", "streaming_sanitize_min_chars", int),
@@ -1552,6 +1539,11 @@ class AgentConfig:
             "AGENT_MAX_CONTEXT_MESSAGES": ("memory", "max_context_messages", int),
             "AGENT_SUMMARY_TRIGGER_TOKENS": ("memory", "summary_trigger_tokens", int),
             "AGENT_CONTEXT_OUTPUT_RESERVE_TOKENS": ("memory", "context_output_reserve_tokens", int),
+            "AGENT_CONTEXT_UNKNOWN_OUTPUT_FALLBACK_TOKENS": ("memory", "context_unknown_output_fallback_tokens", int),
+            "AGENT_CONTEXT_OUTPUT_RESERVE_RATIO": ("memory", "context_output_reserve_ratio", float),
+            "AGENT_CONTEXT_SAFETY_MARGIN_RATIO": ("memory", "context_safety_margin_ratio", float),
+            "AGENT_CONTEXT_MAX_SINGLE_BLOCK_RATIO": ("memory", "context_max_single_block_ratio", float),
+            "AGENT_CONTEXT_BUDGET_POLICY_VERSION": ("memory", "context_budget_policy_version", str),
             "AGENT_CONTEXT_COMPRESSION_TRIGGER_RATIO": ("memory", "context_compression_trigger_ratio", float),
             "AGENT_CONTEXT_COMPRESSION_TARGET_RATIO": ("memory", "context_compression_target_ratio", float),
             "AGENT_MEMORY_CHUNK_SIZE": ("memory", "chunk_size", int),

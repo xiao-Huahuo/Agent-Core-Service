@@ -412,6 +412,8 @@ export function saveMemoryConfig(userId: string, enabled: boolean): Promise<Memo
 
 /* ---- LLM model config ---- */
 
+export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 1_000_000
+
 export interface LLMConfigResponse {
   user_id: string
   api_key: string
@@ -420,6 +422,10 @@ export interface LLMConfigResponse {
   small_api_key: string
   small_base_url: string
   small_model_name: string
+  model_context_window_tokens: number
+  model_max_output_tokens: number
+  small_model_context_window_tokens: number
+  small_model_max_output_tokens: number
   effective_api_key?: string
   effective_base_url?: string
   effective_model_name?: string
@@ -445,15 +451,23 @@ export function saveLLMConfig(
     smallApiKey?: string
     smallBaseUrl?: string
     smallModelName?: string
+    modelContextWindowTokens?: number
+    modelMaxOutputTokens?: number
+    smallModelContextWindowTokens?: number
+    smallModelMaxOutputTokens?: number
   },
 ): Promise<LLMConfigResponse> {
-  const body: Record<string, string> = { user_id: userId }
+  const body: Record<string, string | number> = { user_id: userId }
   if (params.apiKey !== undefined) body.api_key = params.apiKey
   if (params.baseUrl !== undefined) body.base_url = params.baseUrl
   if (params.modelName !== undefined) body.model_name = params.modelName
   if (params.smallApiKey !== undefined) body.small_api_key = params.smallApiKey
   if (params.smallBaseUrl !== undefined) body.small_base_url = params.smallBaseUrl
   if (params.smallModelName !== undefined) body.small_model_name = params.smallModelName
+  if (params.modelContextWindowTokens !== undefined) body.model_context_window_tokens = params.modelContextWindowTokens
+  if (params.modelMaxOutputTokens !== undefined) body.model_max_output_tokens = params.modelMaxOutputTokens
+  if (params.smallModelContextWindowTokens !== undefined) body.small_model_context_window_tokens = params.smallModelContextWindowTokens
+  if (params.smallModelMaxOutputTokens !== undefined) body.small_model_max_output_tokens = params.smallModelMaxOutputTokens
   return apiPut<LLMConfigResponse>(API_ROUTES.SETTINGS_MODEL_CONFIG, body)
 }
 

@@ -18,6 +18,7 @@ import time
 
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import ToolMessage
 import pytest
 
 from agent_service.core.agent_config import AgentConfig
@@ -26,6 +27,8 @@ from agent_service.services.scheduler import FOREGROUND_AGENT_TASK
 from agent_service.services.scheduler import SMALL_MODEL_TIER
 from agent_service.services.scheduler import get_llm_task_scheduler
 from agent_service.services.scheduler import reset_llm_task_schedulers
+from agent_service.services.scheduler.redis_backend import SerializedChatRequest
+from agent_service.services.scheduler.runtime import DeepSeekChatOpenAI
 
 
 def make_scheduler_test_config() -> AgentConfig:
@@ -230,6 +233,8 @@ def test_observability_snapshot_matches_resolved_request_without_secrets() -> No
 
     assert snapshot["messages"] == [{"role": "user", "content": "inspect"}]
     assert snapshot["model"] == "remote-model"
+    assert snapshot["context_budget"]["capacity_source"] == "service_ceiling_default"
+    assert snapshot["context_budget"]["final_input_tokens"] <= snapshot["context_budget"]["input_budget_tokens"]
     assert snapshot["node"] == "agent"
     assert snapshot["tools"][0]["function"]["name"] == "list_available_tools"
     assert "secret-key" not in str(snapshot)
@@ -367,3 +372,168 @@ def test_llm_task_scheduler_stream_chat_yields_reasoning_delta(monkeypatch: obje
     final_message = chunks[-1]["message"]
     merged_reasoning = final_message.additional_kwargs.get("reasoning_content")
     assert "".join(merged_reasoning) == "让我想想"
+
+
+def test_llm_task_scheduler_stream_chat_preserves_mixed_chunk_channels(monkeypatch: object) -> None:
+    """Reasoning、正文和工具调用共存时不得静默丢弃正文 delta。"""
+
+    from langchain_core.messages import AIMessageChunk
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+
+    class FakeModel:
+        """生成 DeepSeek thinking/tool-call 的混合字段 chunk。"""
+
+        def stream(self, _messages: object):
+            yield AIMessageChunk(
+                content="正文一。",
+                additional_kwargs={"reasoning_content": "思考一"},
+            )
+            yield AIMessageChunk(
+                content="正文二。",
+                tool_call_chunks=[{"name": "demo_tool", "args": "{}", "id": "call-1", "index": 0}],
+            )
+
+    monkeypatch.setattr(scheduler, "_get_chat_model", lambda **_kwargs: FakeModel())
+    chunks = list(scheduler.stream_chat(
+        task_type=FOREGROUND_AGENT_TASK,
+        messages=[HumanMessage(content="hi")],
+    ))
+
+    assert [
+        chunk["content_delta"]
+        for chunk in chunks
+        if chunk.get("status") != "complete" and chunk.get("content_delta")
+    ] == ["正文一。", "正文二。"]
+    assert [chunk["reasoning_delta"] for chunk in chunks if chunk.get("reasoning_delta")] == ["思考一"]
+    assert chunks[-1]["stream_diagnostics"] == {
+        "raw_content_chars": 8,
+        "streamed_content_chars": 8,
+        "final_content_chars": 8,
+        "reconciled_content_chars": 0,
+        "content_chunk_count": 2,
+        "max_content_chunk_chars": 4,
+        "mixed_reasoning_content_chunks": 1,
+        "mixed_tool_content_chunks": 1,
+        "content_mismatch": False,
+    }
+
+
+def test_redis_streaming_worker_publishes_reasoning_and_content(monkeypatch: object) -> None:
+    """Redis worker 必须与本地流保持 reasoning/content 事件一致。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+    request = SerializedChatRequest.from_messages(
+        task_id="stream-1",
+        task_type=FOREGROUND_AGENT_TASK,
+        messages=[HumanMessage(content="hi")],
+        tool_names=[],
+        timeout_seconds=3,
+        max_retries=0,
+        dedup_key="",
+        temperature=None,
+        model_tier="large",
+    )
+    request.stream_channel = "stream:test"
+
+    class FakeBackend:
+        """记录 Redis worker 对外发布的无正文事件。"""
+
+        def __init__(self) -> None:
+            self.published: list[dict[str, object]] = []
+
+        def publish_stream_chunk(self, *, channel: str, data: dict[str, object]) -> None:
+            assert channel == "stream:test"
+            self.published.append(data)
+
+        def write_result(self, **_kwargs: object) -> None:
+            pass
+
+        def release_dedup_if_owner(self, **_kwargs: object) -> None:
+            pass
+
+        def ack_and_delete(self, **_kwargs: object) -> None:
+            pass
+
+    backend = FakeBackend()
+    scheduler._backend = backend  # type: ignore[assignment]
+    monkeypatch.setattr(scheduler, "_stream_chat_request", lambda _request: iter([
+        {"reasoning_delta": "思考"},
+        {"content_delta": "回答"},
+        {"message": AIMessage(content="回答"), "status": "complete"},
+    ]))
+
+    scheduler._execute_redis_streaming_chat_request(request=request, entry_id="entry-1")
+
+    assert {"reasoning_delta": "思考"} in backend.published
+    assert {"content_delta": "回答"} in backend.published
+    assert backend.published[-1] == {"status": "done"}
+
+
+def test_deepseek_adapter_preserves_reasoning_chunks_results_and_requests() -> None:
+    """DeepSeek 非标准 reasoning_content 必须稳定双向转换，不能依赖 LangChain 偶然透传。"""
+
+    from langchain_core.messages import AIMessageChunk
+
+    model = DeepSeekChatOpenAI(model="deepseek-v4-flash", api_key="test-key")
+    generation = model._convert_chunk_to_generation_chunk(
+        {
+            "model": "deepseek-v4-flash",
+            "choices": [{
+                "delta": {"role": "assistant", "content": "回答", "reasoning_content": "思考"},
+                "finish_reason": None,
+            }],
+        },
+        AIMessageChunk,
+        None,
+    )
+    assert generation is not None
+    assert generation.message.additional_kwargs["reasoning_content"] == "思考"
+
+    result = model._create_chat_result({
+        "model": "deepseek-v4-flash",
+        "choices": [{
+            "message": {"role": "assistant", "content": "回答", "reasoning_content": "完整思考"},
+            "finish_reason": "stop",
+        }],
+    })
+    assert result.generations[0].message.additional_kwargs["reasoning_content"] == "完整思考"
+
+    payload = model._get_request_payload([
+        HumanMessage(content="先查询"),
+        AIMessage(
+            content="",
+            additional_kwargs={"reasoning_content": "应回传思考"},
+            tool_calls=[{"name": "demo_tool", "args": {}, "id": "call-1", "type": "tool_call"}],
+        ),
+        ToolMessage(content="工具结果", tool_call_id="call-1"),
+    ])
+    assert payload["messages"] == [
+        {"content": "先查询", "role": "user"},
+        {
+            "content": None,
+            "role": "assistant",
+            "tool_calls": [{"type": "function", "id": "call-1", "function": {"name": "demo_tool", "arguments": "{}"}}],
+            "reasoning_content": "应回传思考",
+        },
+        {"content": "工具结果", "role": "tool", "tool_call_id": "call-1"},
+    ]
+
+
+def test_namespaced_deepseek_model_uses_reasoning_adapter() -> None:
+    """模型市场常见的命名空间标识也必须启用 DeepSeek thinking 协议。"""
+
+    config = make_scheduler_test_config()
+    scheduler = get_llm_task_scheduler(config)
+
+    model = scheduler._get_chat_model(
+        tool_names=[],
+        temperature=0,
+        timeout_seconds=3,
+        model_tier="large",
+        api_key="test-key",
+        base_url="https://example.invalid/v1",
+        model_name="unsloth/deepseek-v3.2",
+    )
+
+    assert isinstance(model, DeepSeekChatOpenAI)

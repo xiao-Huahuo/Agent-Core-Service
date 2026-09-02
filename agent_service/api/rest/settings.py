@@ -649,6 +649,20 @@ async def save_llm_config(body: dict[str, Any]) -> dict[str, Any]:
         s = str(value).strip()
         return s
 
+    def _unwrap_nonnegative_int(field: str) -> int | None:
+        if field not in body:
+            return None
+        value = body.get(field)
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"{field} must be an integer") from exc
+        if parsed < 0:
+            raise HTTPException(status_code=422, detail=f"{field} must be nonnegative")
+        return parsed
+
     svc = _require_settings_service()
     return svc.save_llm_config(
         user_id=user_id,
@@ -658,6 +672,10 @@ async def save_llm_config(body: dict[str, Any]) -> dict[str, Any]:
         small_api_key=_unwrap("small_api_key"),
         small_base_url=_unwrap("small_base_url"),
         small_model_name=_unwrap("small_model_name"),
+        model_context_window_tokens=_unwrap_nonnegative_int("model_context_window_tokens"),
+        model_max_output_tokens=_unwrap_nonnegative_int("model_max_output_tokens"),
+        small_model_context_window_tokens=_unwrap_nonnegative_int("small_model_context_window_tokens"),
+        small_model_max_output_tokens=_unwrap_nonnegative_int("small_model_max_output_tokens"),
     )
 
 

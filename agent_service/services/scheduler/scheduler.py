@@ -225,6 +225,8 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         small_api_key: str | None = None,
         small_base_url: str | None = None,
         small_model_name: str | None = None,
+        context_window_tokens: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> BaseMessage:
         """提交并同步等待一个可序列化的 LLM Chat 请求。"""
 
@@ -249,6 +251,8 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             small_api_key=small_api_key,
             small_base_url=small_base_url,
             small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
         return handle.wait(timeout=timeout_seconds)
 
@@ -267,6 +271,8 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         small_api_key: str | None = None,
         small_base_url: str | None = None,
         small_model_name: str | None = None,
+        context_window_tokens: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         流式调用 LLM Chat,逐 token 产出增量内容。
@@ -312,6 +318,8 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             small_api_key=small_api_key,
             small_base_url=small_base_url,
             small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
         if self._backend is not None:
             request.stream_channel = f"stream:{request.task_id}"
@@ -330,10 +338,14 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                             task_id=request.task_id, timeout=request.timeout_seconds
                         )
                         full_content = getattr(final_message, "content", "") or ""
+                        stream_diagnostics = (
+                            getattr(final_message, "additional_kwargs", {}).get("stream_diagnostics", {})
+                        )
                         yield {
                             "content_delta": full_content,
                             "message": final_message,
                             "status": "complete",
+                            "stream_diagnostics": stream_diagnostics,
                         }
                         return
                     if chunk.get("status") == "error":
@@ -361,6 +373,8 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         small_api_key: str | None = None,
         small_base_url: str | None = None,
         small_model_name: str | None = None,
+        context_window_tokens: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> LLMTaskHandle:
         """提交一个可序列化的 LLM Chat 请求。"""
 
@@ -385,6 +399,8 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             small_api_key=small_api_key,
             small_base_url=small_base_url,
             small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
         if self._backend is None:
             return self._submit_local_chat_request(request)
@@ -711,6 +727,12 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             with self._global_semaphore:
                 final_message: Any = None
                 for chunk in self._stream_chat_request(request):
+                    reasoning_delta = chunk.get("reasoning_delta", "")
+                    if reasoning_delta:
+                        self._backend.publish_stream_chunk(
+                            channel=channel,
+                            data={"reasoning_delta": reasoning_delta},
+                        )
                     content_delta = chunk.get("content_delta", "")
                     if content_delta:
                         self._backend.publish_stream_chunk(
@@ -773,7 +795,19 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
     def _invoke_chat_request(self, request: SerializedChatRequest) -> BaseMessage:
         """根据序列化请求构造模型并执行真实 Chat 调用。"""
 
-        messages = request.restore_messages()
+        messages, _context_budget = self.prepare_messages_for_model(
+            messages=request.restore_messages(),
+            tool_names=request.tool_names,
+            model_tier=request.model_tier,
+            api_key=request.api_key,
+            base_url=request.base_url,
+            model_name=request.model_name,
+            small_api_key=request.small_api_key,
+            small_base_url=request.small_base_url,
+            small_model_name=request.small_model_name,
+            context_window_tokens=request.context_window_tokens,
+            max_output_tokens=request.max_output_tokens,
+        )
         model = self._get_chat_model(
             tool_names=request.tool_names,
             temperature=request.temperature,
@@ -802,7 +836,19 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         request: 序列化的 Chat 请求。
         """
 
-        messages = request.restore_messages()
+        messages, _context_budget = self.prepare_messages_for_model(
+            messages=request.restore_messages(),
+            tool_names=request.tool_names,
+            model_tier=request.model_tier,
+            api_key=request.api_key,
+            base_url=request.base_url,
+            model_name=request.model_name,
+            small_api_key=request.small_api_key,
+            small_base_url=request.small_base_url,
+            small_model_name=request.small_model_name,
+            context_window_tokens=request.context_window_tokens,
+            max_output_tokens=request.max_output_tokens,
+        )
         model = self._get_chat_model(
             tool_names=request.tool_names,
             temperature=request.temperature,
@@ -819,6 +865,12 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         try:
             with self._acquire_model_pool(request.model_tier):
                 merged: Any = None
+                streamed_content_parts: list[str] = []
+                raw_content_chars = 0
+                content_chunk_count = 0
+                max_content_chunk_chars = 0
+                mixed_reasoning_content_chunks = 0
+                mixed_tool_content_chunks = 0
                 # DeepSeek 等模型的思考内容(reasoning_content)与正文分开推送:
                 # 单独 yield reasoning_delta 供上层实时透传,不污染 content_delta。
                 for chunk in model.stream(messages):
@@ -831,11 +883,19 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                         reasoning = "".join(str(part) for part in reasoning)
                     if isinstance(reasoning, str) and reasoning:
                         yield {"reasoning_delta": reasoning}
-                    has_reasoning = bool(reasoning)
-                    if not tool_calls and not has_reasoning:
-                        content_delta = getattr(chunk, "content", "") or ""
-                        if isinstance(content_delta, str) and content_delta:
-                            yield {"content_delta": content_delta}
+                    content_delta = getattr(chunk, "content", "") or ""
+                    if isinstance(content_delta, str) and content_delta:
+                        raw_content_chars += len(content_delta)
+                        content_chunk_count += 1
+                        max_content_chunk_chars = max(max_content_chunk_chars, len(content_delta))
+                        streamed_content_parts.append(content_delta)
+                        if reasoning:
+                            mixed_reasoning_content_chunks += 1
+                        if tool_calls:
+                            mixed_tool_content_chunks += 1
+                        # reasoning/content/tool_calls 是三个独立通道；任一字段
+                        # 存在都不得阻断同一 provider chunk 中的正文增量。
+                        yield {"content_delta": content_delta}
                     if merged is None:
                         merged = chunk
                     else:
@@ -847,10 +907,41 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                 if not isinstance(full_content, str):
                     full_content = ""
                 merged_additional = getattr(merged, "additional_kwargs", None) or {}
+                streamed_content = "".join(streamed_content_parts)
+                content_mismatch = streamed_content != full_content
+                reconciled_content_chars = (
+                    len(full_content) - len(streamed_content)
+                    if full_content.startswith(streamed_content)
+                    else max(0, len(full_content) - len(streamed_content))
+                )
+                stream_diagnostics = {
+                    "raw_content_chars": raw_content_chars,
+                    "streamed_content_chars": len(streamed_content),
+                    "final_content_chars": len(full_content),
+                    "reconciled_content_chars": reconciled_content_chars,
+                    "content_chunk_count": content_chunk_count,
+                    "max_content_chunk_chars": max_content_chunk_chars,
+                    "mixed_reasoning_content_chunks": mixed_reasoning_content_chunks,
+                    "mixed_tool_content_chunks": mixed_tool_content_chunks,
+                    "content_mismatch": content_mismatch,
+                }
+                if content_mismatch:
+                    logger.warning(
+                        "LLM 流式正文与终态不一致 | task_type=%s model_tier=%s "
+                        "streamed_chars=%d final_chars=%d reconciled_chars=%d",
+                        request.task_type,
+                        request.model_tier,
+                        len(streamed_content),
+                        len(full_content),
+                        reconciled_content_chars,
+                    )
                 final_message_kwargs = {
                     "content": full_content,
                     "tool_calls": getattr(merged, "tool_calls", None) or [],
-                    "additional_kwargs": merged_additional,
+                    "additional_kwargs": {
+                        **merged_additional,
+                        "stream_diagnostics": stream_diagnostics,
+                    },
                     "response_metadata": getattr(merged, "response_metadata", None) or {},
                 }
                 usage_metadata = getattr(merged, "usage_metadata", None)
@@ -861,6 +952,7 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                     "content_delta": full_content,
                     "message": final_message,
                     "status": "complete",
+                    "stream_diagnostics": stream_diagnostics,
                 }
         except Exception:
             breaker.record_failure()

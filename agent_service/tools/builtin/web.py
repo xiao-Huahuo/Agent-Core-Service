@@ -122,9 +122,6 @@ def web_search(
             text = html_mod.unescape(text)
             # Collapse whitespace
             text = re_mod.sub(r"\s+", " ", text).strip()
-            # Truncate to reasonable length
-            if len(text) > limits.web_fetch_max_chars:
-                text = text[:limits.web_fetch_max_chars] + "..."
             if len(text) < limits.web_fetch_min_chars:
                 return fallback
             return text

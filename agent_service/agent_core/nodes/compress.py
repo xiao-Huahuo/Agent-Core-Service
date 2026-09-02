@@ -27,6 +27,7 @@ from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
+from agent_service.core.context_budget import ContextBudget, ModelCapacity
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.important_fact_summary_service import ImportantFactSummaryService
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
@@ -70,6 +71,13 @@ class CompressNode:
 
         llm_config = state.get("llm_config") or {}
         model_name = str(llm_config.get("model_name") or self.config.model.model_name or "") or None
+        capacity = ModelCapacity.resolve(
+            config=self.config,
+            model_name=model_name or self.config.model.local_model_name,
+            model_tier="large",
+            context_window_tokens=int(llm_config.get("model_context_window_tokens") or 0) or None,
+            max_output_tokens=int(llm_config.get("model_max_output_tokens") or 0) or None,
+        )
         fixed_request_tokens = int(state.get("context_overhead_tokens", 0) or 0) + int(
             state.get("context_tool_tokens", 0) or 0
         )
@@ -77,7 +85,14 @@ class CompressNode:
             ContextBuilder.estimate_messages_tokens(state["messages"], model_name=model_name)
             + fixed_request_tokens
         )
-        available_tokens, trigger_tokens, target_tokens = ContextBuilder.compression_limits(self.config)
+        available_tokens, trigger_tokens, target_tokens = ContextBuilder.compression_limits(
+            self.config,
+            capacity,
+        )
+        display_window_tokens = ContextBudget.from_config(
+            config=self.config,
+            capacity=capacity,
+        ).effective_window_tokens
         if estimated_tokens < trigger_tokens:
             return {
                 "trace": [
@@ -96,7 +111,7 @@ class CompressNode:
             {
                 "event": "compression_started",
                 "tokens_before": estimated_tokens,
-                "max_context_tokens": available_tokens,
+                "max_context_tokens": display_window_tokens,
                 "trigger_tokens": trigger_tokens,
                 "target_tokens": target_tokens,
                 "version": int(previous_state.get("version", 0) or 0) + 1,
@@ -116,6 +131,7 @@ class CompressNode:
                 reason=type(exc).__name__,
                 tokens_before=estimated_tokens,
                 available_tokens=available_tokens,
+                display_window_tokens=display_window_tokens,
                 trigger_tokens=trigger_tokens,
                 target_tokens=target_tokens,
                 model_name=model_name,
@@ -126,6 +142,7 @@ class CompressNode:
                 reason="empty_summary",
                 tokens_before=estimated_tokens,
                 available_tokens=available_tokens,
+                display_window_tokens=display_window_tokens,
                 trigger_tokens=trigger_tokens,
                 target_tokens=target_tokens,
                 model_name=model_name,
@@ -135,7 +152,7 @@ class CompressNode:
             cancelled = {
                 "event": "compression_cancelled",
                 "tokens_before": estimated_tokens,
-                "max_context_tokens": available_tokens,
+                "max_context_tokens": display_window_tokens,
             }
             self._emit_event(cancelled)
             return {
@@ -193,7 +210,7 @@ class CompressNode:
             "event": "compression_applied",
             "tokens_before": estimated_tokens,
             "tokens_after": tokens_after,
-            "max_context_tokens": available_tokens,
+            "max_context_tokens": display_window_tokens,
             "trigger_tokens": trigger_tokens,
             "target_tokens": target_tokens,
             "version": compression_state["version"],
@@ -293,6 +310,7 @@ class CompressNode:
         reason: str,
         tokens_before: int,
         available_tokens: int,
+        display_window_tokens: int,
         trigger_tokens: int,
         target_tokens: int,
         model_name: str | None,
@@ -318,7 +336,7 @@ class CompressNode:
             "reason": reason,
             "tokens_before": tokens_before,
             "tokens_after": tokens_after,
-            "max_context_tokens": available_tokens,
+            "max_context_tokens": display_window_tokens,
             "trigger_tokens": trigger_tokens,
             "target_tokens": target_tokens,
         }

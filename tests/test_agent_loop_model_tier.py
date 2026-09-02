@@ -152,6 +152,38 @@ def test_each_model_stream_resets_the_cumulative_token_boundary() -> None:
     assert callbacks == ["", "新", "新回复"]
 
 
+def test_model_decision_disables_tools_after_cumulative_turn_budget() -> None:
+    """单轮累计工具调用达到上限后，下一次模型请求必须解绑工具并生成最终回答。"""
+
+    scheduler = _FakeScheduler("达到工具预算后的回答")
+    config = AgentConfig()
+    node = ModelDecisionNode(
+        config=config,
+        tools=[type("Tool", (), {"name": "wait_for_child_agents"})()],
+        task_scheduler=scheduler,
+    )
+    messages = [HumanMessage(content="等待子 Agent")]
+    for index in range(config.limits.agent_max_tool_calls_per_turn):
+        call_id = f"wait-{index}"
+        messages.extend([
+            AIMessage(
+                content="",
+                tool_calls=[{"id": call_id, "name": "wait_for_child_agents", "args": {}}],
+            ),
+            ToolMessage(content='{"result": null, "children": []}', tool_call_id=call_id),
+        ])
+
+    node({
+        "messages": messages,
+        "user_id": "u1",
+        "session_id": "s1",
+        "trace": [],
+        "llm_config": {},
+    })
+
+    assert scheduler.calls[0]["tool_names"] == []
+
+
 def test_observation_respects_continue_after_long_exploration() -> None:
     """观察节点不得因固定观察次数或工具结果数量强制结束探索。"""
 
@@ -283,14 +315,14 @@ def test_react_graph_routes_around_compress_until_context_exceeds_budget() -> No
     assert builder._route_context_budget({"messages": [HumanMessage(content="长" * 300)]}) == "compress"
 
 
-def test_production_context_compression_defaults_use_large_ratio_budget() -> None:
-    """产品默认不得退回测试级 4 万 token 固定阈值。"""
+def test_production_context_compression_defaults_use_service_ceiling() -> None:
+    """未填写模型容量时直接使用服务 100 万窗口，不再回退 128K。"""
 
     available, trigger, target = ContextBuilder.compression_limits(AgentConfig())
 
-    assert available == 934_464
-    assert trigger == 747_571
-    assert target == 420_509
+    assert available == 971_808
+    assert trigger == 777_446
+    assert target == 437_314
 
 
 def test_observation_parses_structured_decisions() -> None:
@@ -371,7 +403,7 @@ def test_tool_call_node_defers_excessive_parallel_tool_calls() -> None:
     assert result["trace"][-1]["event"] == "tool_call_deferred"
 
 
-def test_model_decision_compacts_tool_messages_before_llm_call() -> None:
+def test_model_decision_keeps_complete_tool_messages_for_dynamic_assembler() -> None:
     system = SystemMessage(content="system")
     messages = [
         HumanMessage(content="read file"),
@@ -384,11 +416,11 @@ def test_model_decision_compacts_tool_messages_before_llm_call() -> None:
     assert prepared[0] is system
     assert isinstance(prepared[-1], ToolMessage)
     assert prepared[-1].tool_call_id == "call_1"
-    assert len(str(prepared[-1].content)) < 1200
-    assert "工具返回内容已压缩" in str(prepared[-1].content)
+    assert len(str(prepared[-1].content)) == 2000
+    assert "工具返回内容已压缩" not in str(prepared[-1].content)
 
 
-def test_model_decision_keeps_recent_terminal_results_large_enough_for_directory_analysis() -> None:
+def test_model_decision_does_not_apply_terminal_specific_character_budget() -> None:
     system = SystemMessage(content="system")
     messages = [
         HumanMessage(content="调查知识库"),
@@ -399,8 +431,7 @@ def test_model_decision_keeps_recent_terminal_results_large_enough_for_directory
     prepared = ModelDecisionNode._prepare_messages_for_llm(system, messages)
 
     assert isinstance(prepared[-1], ToolMessage)
-    assert len(str(prepared[-1].content)) > 6000
-    assert "6000" in str(prepared[-1].content)
+    assert len(str(prepared[-1].content)) == 7000
 
 
 def test_list_available_tools_returns_full_tool_catalog() -> None:

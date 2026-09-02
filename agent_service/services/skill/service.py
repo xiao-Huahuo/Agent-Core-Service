@@ -20,6 +20,7 @@ from typing import Any, Sequence
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent_service.core.agent_config import AgentConfig
+from agent_service.core.context_budget import capacity_overrides_from_mapping
 from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK, LLMTaskScheduler
 from agent_service.services.settings.service import SettingsService
 
@@ -36,7 +37,7 @@ class SkillRecord:
     has_references: bool
     has_assets: bool
 
-    def to_dict(self, *, include_body: bool = False, body_max_chars: int | None = None) -> dict[str, Any]:
+    def to_dict(self, *, include_body: bool = False) -> dict[str, Any]:
         payload = {
             "skill_id": self.skill_id,
             "name": self.name,
@@ -50,7 +51,7 @@ class SkillRecord:
             "has_assets": self.has_assets,
         }
         if include_body:
-            payload["body"] = self.path.read_text(encoding="utf-8")[:body_max_chars]
+            payload["body"] = self.path.read_text(encoding="utf-8")
         return payload
 
 
@@ -203,10 +204,7 @@ class SkillService:
         record = self._read_skill(skill_path=skill_path, source="user", disabled=set())
         if record is None:
             raise ValueError("Created skill could not be read")
-        return record.to_dict(
-            include_body=True,
-            body_max_chars=self.config.limits.skill_body_max_chars,
-        )
+        return record.to_dict(include_body=True)
 
     def update_user_skill(
         self,
@@ -235,10 +233,7 @@ class SkillService:
         record = self._read_skill(skill_path=skill_path, source="user", disabled=self._read_disabled_skill_ids(user_id=user_id))
         if record is None:
             raise ValueError("Updated skill could not be read")
-        return record.to_dict(
-            include_body=True,
-            body_max_chars=self.config.limits.skill_body_max_chars,
-        )
+        return record.to_dict(include_body=True)
 
     def delete_user_skill(self, *, user_id: str, skill_id: str) -> dict[str, Any]:
         """删除用户 Skill 目录，并清理其禁用配置项。"""
@@ -315,6 +310,10 @@ class SkillService:
         api_key = self._normalize(llm_config.get("small_api_key")) or self._normalize(llm_config.get("api_key"))
         base_url = self._normalize(llm_config.get("small_base_url")) or self._normalize(llm_config.get("base_url"))
         model_name = self._normalize(llm_config.get("small_model_name")) or self._normalize(llm_config.get("model_name"))
+        context_window_tokens, max_output_tokens = capacity_overrides_from_mapping(
+            llm_config,
+            model_tier="small",
+        )
         if not api_key or not model_name:
             return []
         catalog = "\n".join(
@@ -339,6 +338,8 @@ class SkillService:
                 small_api_key=api_key,
                 small_base_url=base_url,
                 small_model_name=model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
             )
             text = str(getattr(response, "content", "") or "")
             parsed = json.loads(self._strip_json_fence(text))
@@ -468,7 +469,7 @@ class SkillService:
     def _with_body(self, skill: dict[str, Any]) -> dict[str, Any]:
         path = Path(str(skill["path"]))
         payload = dict(skill)
-        payload["body"] = path.read_text(encoding="utf-8")[:self.config.limits.skill_body_max_chars]
+        payload["body"] = path.read_text(encoding="utf-8")
         return payload
 
     @staticmethod

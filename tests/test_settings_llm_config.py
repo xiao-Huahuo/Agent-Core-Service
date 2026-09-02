@@ -123,6 +123,41 @@ def test_llm_config_empty_small_fields_clear_stale_values() -> None:
     assert config["effective_small_model_name"] == "large-model"
 
 
+def test_llm_config_persists_explicit_model_capacity_overrides() -> None:
+    """主/小模型容量覆盖必须独立持久化，0 保留为继承语义。"""
+
+    service = make_settings_service()
+
+    saved = service.save_llm_config(
+        user_id="u-capacity",
+        model_context_window_tokens=1_000_000,
+        model_max_output_tokens=65_536,
+        small_model_context_window_tokens=131_072,
+        small_model_max_output_tokens=8_192,
+    )
+    loaded = service.get_llm_config(user_id="u-capacity")
+
+    assert saved["model_context_window_tokens"] == 1_000_000
+    assert loaded["model_max_output_tokens"] == 65_536
+    assert loaded["small_model_context_window_tokens"] == 131_072
+    assert loaded["small_model_max_output_tokens"] == 8_192
+
+
+def test_llm_context_window_defaults_to_service_million_for_new_and_existing_zero_rows() -> None:
+    """无用户覆盖或旧记录为 0 时，设置 API 都应展示并使用 100 万默认窗口。"""
+
+    service = make_settings_service()
+
+    default_config = service.get_llm_config(user_id="u-default-capacity")
+    service.save_llm_config(user_id="u-existing-zero", model_name="deepseek-v4-flash")
+    existing_config = service.get_llm_config(user_id="u-existing-zero")
+
+    assert default_config["model_context_window_tokens"] == 1_000_000
+    assert default_config["small_model_context_window_tokens"] == 1_000_000
+    assert existing_config["model_context_window_tokens"] == 1_000_000
+    assert existing_config["small_model_context_window_tokens"] == 1_000_000
+
+
 def test_llm_config_presets_can_be_saved_listed_and_deleted() -> None:
     service = make_settings_service()
 

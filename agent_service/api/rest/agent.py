@@ -12,6 +12,7 @@ from typing import Any, Iterator
 
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.rest.deps import (
@@ -426,6 +427,27 @@ async def update_child_agent(run_id: str, body: dict[str, Any]) -> dict[str, Any
     return {"run_id": run_id, "ok": True}
 
 
+@router.post("/agent/children/{run_id}/claim-wakeup")
+async def claim_child_agent_wakeup(
+    run_id: str,
+    user_id: str = Body(..., embed=True),
+    session_id: str = Body(..., embed=True),
+) -> dict[str, Any]:
+    """原子领取子 Agent 当前 Turn 的自动唤醒，阻止多窗口重复触发。"""
+
+    try:
+        claimed = _require_agent().claim_child_agent_completion_wakeup(
+            run_id=run_id,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        return {"run_id": run_id, "claimed": claimed}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
 @router.get("/agent/children/{run_id}/dsh-web")
 async def get_child_agent_dsh_web(
     run_id: str,
@@ -444,7 +466,13 @@ async def get_child_agent_dsh_web(
         )
         if child is None:
             raise KeyError("DSH 子 Agent不存在")
-        url = _require_dsh_executor().ensure_web(child={**child, "session_id": session_id}, user_id=user_id)
+        # DSH 启动期间 ``ensure_web`` 会等待执行器发布本地 Web 地址；必须放到
+        # 服务线程池，避免该等待占住 FastAPI 事件循环并拖死子 Agent 状态轮询。
+        url = await run_in_threadpool(
+            _require_dsh_executor().ensure_web,
+            child={**child, "session_id": session_id},
+            user_id=user_id,
+        )
         return {"run_id": run_id, "url": url}
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

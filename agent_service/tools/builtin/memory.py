@@ -34,7 +34,7 @@ def get_long_term_memory(query: str, top_k: int | None = None) -> str:
     """
 
     runtime = get_tool_runtime()
-    top_k = top_k or runtime.config.memory.rerank_top_k
+    top_k = top_k or runtime.config.limits.memory_search_default_limit
     results = runtime.retrieval_service.retrieve_long_term_memory(
         query=query,
         user_id=runtime.user_id,
@@ -56,7 +56,7 @@ def get_knowledge_context(query: str, top_k: int | None = None) -> str:
     """
 
     runtime = get_tool_runtime()
-    top_k = top_k or runtime.config.memory.rerank_top_k
+    top_k = top_k or runtime.config.memory.knowledge_search_semantic_top_k
     results = runtime.retrieval_service.retrieve_knowledge(
         query=query,
         user_id=runtime.user_id,
@@ -167,26 +167,15 @@ def delete_long_term_memory(content: str) -> str:
     if not normalized_content:
         return "删除失败: content 不能为空。"
     runtime = get_tool_runtime()
-    memories = runtime.memory_service.list_user_memories(
+    matched = runtime.memory_service.find_user_memory_by_content(
         user_id=runtime.user_id,
-        limit=runtime.config.limits.memory_delete_scan_limit,
+        content=normalized_content,
     )
-    lower_content = normalized_content.lower()
-    matched = None
-    for m in memories:
-        if m.content.strip().lower() == lower_content:
-            matched = m
-            break
-    if not matched:
-        for m in memories:
-            if lower_content in m.content.strip().lower() or m.content.strip().lower() in lower_content:
-                matched = m
-                break
     if not matched:
         return f"未找到内容匹配的长期记忆: {normalized_content}"
     success = runtime.memory_service.delete_memory(memory_id=matched.memory_id)
     if success:
-        return f"已删除长期记忆: {matched.content[:runtime.config.limits.tool_memory_mutation_result_chars]}"
+        return f"已删除长期记忆: {matched.content}"
     return f"删除长期记忆失败，可能已被删除。"
 def delete_long_term_rule(content: str) -> str:
     """
@@ -223,7 +212,7 @@ def delete_long_term_rule(content: str) -> str:
         return f"未找到内容匹配的长期规则: {normalized_content}"
     success = settings_service.delete_system_prompt_entry(prompt_id=matched["prompt_id"])
     if success:
-        return f"已删除长期规则: {matched['content'][:runtime.config.limits.tool_memory_mutation_result_chars]}"
+        return f"已删除长期规则: {matched['content']}"
     return f"删除长期规则失败，可能已被删除。"
 def write_long_term_rule(content: str) -> str:
     """

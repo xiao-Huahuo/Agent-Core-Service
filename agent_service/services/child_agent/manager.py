@@ -72,6 +72,8 @@ class ChildAgentManager:
         self._records: dict[str, ChildAgentRecord] = {}
         self._futures: dict[str, Future[Any]] = {}
         self._executors: dict[str, ChildAgentExecutor] = {}
+        self._turn_numbers: dict[str, int] = {}
+        self._claimed_wakeup_turns: dict[str, int] = {}
         self._result_queues: defaultdict[str, Queue[ChildAgentResult]] = defaultdict(Queue)
         self._event_queues_by_session: defaultdict[str, Queue[ChildAgentEvent]] = defaultdict(Queue)
         self._lock = Lock()
@@ -140,6 +142,7 @@ class ChildAgentManager:
         with self._lock:
             self._records[run_id] = record
             self._executors[run_id] = executor
+            self._turn_numbers[run_id] = 0
             self._result_queues[contract.parent_run_id]
         self._emit("child_agent.created", record)
 
@@ -167,6 +170,8 @@ class ChildAgentManager:
         record.context.cancellation = Event()
         record.result = None
         record.status = ChildAgentStatus.CREATED
+        with self._lock:
+            self._turn_numbers[run_id] = self._turn_numbers.get(run_id, 0) + 1
         self._discard_queued_results(record.contract.parent_run_id, run_id)
         executor = self._executors[run_id]
         self._emit("child_agent.turn_created", record)
@@ -226,8 +231,28 @@ class ChildAgentManager:
                 return existing
             self._records[run_id] = record
             self._executors[run_id] = executor
+            self._turn_numbers[run_id] = 0
             self._result_queues[contract.parent_run_id]
         return record
+
+    def claim_completion_wakeup(self, run_id: str) -> bool:
+        """原子领取当前子 Agent Turn 的终态唤醒；同一 Turn 只允许成功一次。"""
+
+        with self._lock:
+            record = self._records.get(run_id)
+            if record is None:
+                raise KeyError(f"子 Agent {run_id} 不存在。")
+            if record.status not in {
+                ChildAgentStatus.COMPLETED,
+                ChildAgentStatus.FAILED,
+                ChildAgentStatus.STOPPED,
+            }:
+                return False
+            turn_number = self._turn_numbers.get(run_id, 0)
+            if self._claimed_wakeup_turns.get(run_id) == turn_number:
+                return False
+            self._claimed_wakeup_turns[run_id] = turn_number
+            return True
 
     def list_children(self, parent_run_id: str) -> list[ChildAgentRecord]:
         """列出指定父 Agent 创建的全部子 Agent。"""
@@ -322,6 +347,40 @@ class ChildAgentManager:
                 return result
             skipped_results.append(result)
 
+    def wait_for_children_for_session(
+        self,
+        *,
+        session_id: str,
+        run_ids: list[str] | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ChildAgentResult | None:
+        """跨父 run 等待同一主会话的下一个子 Agent 终态结果。"""
+
+        deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
+        target_run_ids = set(run_ids or [])
+        skipped_results: list[ChildAgentResult] = []
+        while True:
+            available = self.drain_results_for_session(session_id)
+            for index, result in enumerate(available):
+                if not target_run_ids or result.run_id in target_run_ids:
+                    self._restore_session_results([*skipped_results, *available[index + 1:]])
+                    return result
+                skipped_results.append(result)
+            records = self.list_children_for_session(session_id)
+            if target_run_ids:
+                records = [record for record in records if record.run_id in target_run_ids]
+            if not any(record.status in {ChildAgentStatus.CREATED, ChildAgentStatus.RUNNING} for record in records):
+                self._restore_session_results(skipped_results)
+                return None
+            sleep_seconds = 0.05
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    self._restore_session_results(skipped_results)
+                    return None
+                sleep_seconds = min(sleep_seconds, remaining)
+            time.sleep(sleep_seconds)
+
     def stop(self, run_id: str) -> bool:
         """向子 Agent 发送协作式停止信号。"""
 
@@ -370,7 +429,6 @@ class ChildAgentManager:
                 status=ChildAgentStatus.STOPPED,
                 error=str(exc),
             )
-            record.status = ChildAgentStatus.STOPPED
         except Exception as exc:  # noqa: BLE001
             result = ChildAgentResult(
                 run_id=record.run_id,
@@ -378,7 +436,6 @@ class ChildAgentManager:
                 status=ChildAgentStatus.FAILED,
                 error=str(exc),
             )
-            record.status = ChildAgentStatus.FAILED
         else:
             result = ChildAgentResult(
                 run_id=record.run_id,
@@ -387,9 +444,10 @@ class ChildAgentManager:
                 result=value,
                 summary=str(value) if isinstance(value, str) else "",
             )
-            record.status = ChildAgentStatus.COMPLETED
-        record.result = result
-        self._result_queues[record.contract.parent_run_id].put(result)
+        with self._lock:
+            self._result_queues[record.contract.parent_run_id].put(result)
+            record.result = result
+            record.status = result.status
         self._emit(f"child_agent.{record.status.value}", record)
 
     def _require_record(self, run_id: str) -> ChildAgentRecord:
@@ -416,6 +474,12 @@ class ChildAgentManager:
         result_queue = self._result_queues[parent_run_id]
         for result in results:
             result_queue.put(result)
+
+    def _restore_session_results(self, results: list[ChildAgentResult]) -> None:
+        """把未被 session 级等待消费的结果放回各自父 run 队列。"""
+
+        for result in results:
+            self._result_queues[result.parent_run_id].put(result)
 
     def _discard_queued_results(self, parent_run_id: str, run_id: str) -> None:
         """移除同一 DSH Child Agent上一轮尚未消费的结果，避免追问收到旧 Turn。"""

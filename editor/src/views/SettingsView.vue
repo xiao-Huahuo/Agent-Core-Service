@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
-import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchMemoryConfig, saveMemoryConfig, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
+import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS, fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchMemoryConfig, saveMemoryConfig, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
 import type { LLMConfigResponse, SystemPromptEntry, MemoryEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
@@ -555,6 +555,10 @@ const largeApiKey = ref('')
 const smallModelName = ref('')
 const smallBaseUrl = ref('')
 const smallApiKey = ref('')
+const largeContextWindowTokens = ref(DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS)
+const largeMaxOutputTokens = ref(0)
+const smallContextWindowTokens = ref(DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS)
+const smallMaxOutputTokens = ref(0)
 const showLargeKey = ref(false)
 const showSmallKey = ref(false)
 const modelSaving = ref(false)
@@ -590,6 +594,10 @@ async function loadModelConfig() {
     smallModelName.value = cfg.small_model_name || ''
     smallBaseUrl.value = cfg.small_base_url || ''
     smallApiKey.value = cfg.small_api_key || ''
+    largeContextWindowTokens.value = cfg.model_context_window_tokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+    largeMaxOutputTokens.value = cfg.model_max_output_tokens || 0
+    smallContextWindowTokens.value = cfg.small_model_context_window_tokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+    smallMaxOutputTokens.value = cfg.small_model_max_output_tokens || 0
     applyEffectiveModelConfig(cfg)
   } catch { /* ignore */ }
   finally { modelConfigLoaded.value = true }
@@ -617,6 +625,10 @@ async function handleSaveModel() {
       smallApiKey: smallApiKey.value,
       smallBaseUrl: smallBaseUrl.value,
       smallModelName: smallModelName.value,
+      modelContextWindowTokens: largeContextWindowTokens.value,
+      modelMaxOutputTokens: largeMaxOutputTokens.value,
+      smallModelContextWindowTokens: smallContextWindowTokens.value,
+      smallModelMaxOutputTokens: smallMaxOutputTokens.value,
     })
     modelEditing.value = false
     applyEffectiveModelConfig(saved)
@@ -802,12 +814,16 @@ onBeforeUnmount(() => {
         v-model:large-api-key="largeApiKey"
         v-model:large-base-url="largeBaseUrl"
         v-model:large-model-name="largeModelName"
+        v-model:large-context-window-tokens="largeContextWindowTokens"
+        v-model:large-max-output-tokens="largeMaxOutputTokens"
         v-model:model-editing="modelEditing"
         v-model:show-large-key="showLargeKey"
         v-model:show-small-key="showSmallKey"
         v-model:small-api-key="smallApiKey"
         v-model:small-base-url="smallBaseUrl"
         v-model:small-model-name="smallModelName"
+        v-model:small-context-window-tokens="smallContextWindowTokens"
+        v-model:small-max-output-tokens="smallMaxOutputTokens"
         :model-config-saved="modelConfigSaved"
         :model-config-loaded="modelConfigLoaded"
         :model-msg="modelMsg"

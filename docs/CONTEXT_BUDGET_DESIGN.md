@@ -3,13 +3,14 @@
 ## 文档状态
 
 - 类型：技术设计 / RFC
+- 实施状态：已落地（预算策略 `dynamic-v1`）
 - 目标读者：Agent Core、模型调度、工具运行时、记忆与知识服务的维护者
 - 关联审计：`docs/acceptance/context_tool_truncation_inventory.md`
 - 核心决策：停止用互不相关的字符常数裁剪模型可见内容；所有模型请求统一由实际模型上下文窗口推导 token 预算，超长内容通过结构化摘要、分页、范围读取、引用句柄和显式降级处理，禁止静默保留前缀。
 
 ## 1. 摘要
 
-当前系统把上下文容量拆散成大量相互独立的“字符上限”：工具可能先截断一次，`ToolMessage` 进入主模型前再截断一次，Planner 和 Observation 又各自截断一次。即使服务配置了 `context_window_tokens=1_000_000`，普通工具结果仍可能只以 900 字或 240 字进入主模型。上游容量与下游容量没有共同基准，导致以下结果：
+迁移前的系统把上下文容量拆散成大量相互独立的“字符上限”：工具可能先截断一次，`ToolMessage` 进入主模型前再截断一次，Planner 和 Observation 又各自截断一次。即使服务配置了 `context_window_tokens=1_000_000`，普通工具结果仍可能只以 900 字或 240 字进入主模型。上游容量与下游容量没有共同基准，导致以下结果：
 
 - Agent 看不到工具结论、错误尾部或文件后半段，误以为工具未完成并重复调用；
 - Planner 和 Observation 根据残缺预览做决策，推动 Agent 进入无效循环；
@@ -40,9 +41,9 @@
 
 ### 2.2 当前 token 窗口也存在结构性问题
 
-现有 `select_recent_messages_within_budget` 从后向前装入消息，第一条消息放不下时直接停止。若最近存在一条超大的工具结果，该结果之前仍然有价值的历史也不会再参与选择。
+迁移前的 `select_recent_messages_within_budget` 从后向前装入消息，第一条消息放不下时直接停止。若最近存在一条超大的工具结果，该结果之前仍然有价值的历史也不会再参与选择。
 
-此外，系统只配置一个全局 `context_window_tokens`，调度器尚未解析当前大模型、小模型和本地模型各自的上下文窗口与最大输出。100 万 token 目前既被当作服务配置，又被隐含当作模型能力，这两个概念需要分离。
+当前实现已经分离服务 ceiling 与模型能力：调度器在每次真实调用前分别解析主模型、小模型和本地模型的上下文窗口与最大输出；未填写模型窗口时直接使用 100 万服务默认值，用户仍可通过正式设置收紧模型能力。旧问题保留在本节作为迁移动机。
 
 ## 3. 目标与非目标
 
@@ -114,13 +115,13 @@ W = min(service_context_ceiling, model_context_window, request_context_override?
 1. 用户或管理员为具体 `provider + base_url + model_name` 显式登记的能力；
 2. 内置版本化模型能力表；
 3. 提供商模型元数据接口返回且通过校验的能力；
-4. 对未知 OpenAI-compatible 模型使用明确配置的保守 fallback：上下文默认 131,072 tokens，最大输出默认 8,192 tokens。
+4. 未登记或未填写窗口的 OpenAI-compatible 模型直接使用服务 ceiling，当前默认 1,000,000 tokens；最大输出未填写时仍使用 8,192 tokens 的输出能力默认值。
 
-未知模型不得自动假定支持 100 万 token。这两个 fallback 只在没有显式覆盖、内置能力和可信提供商元数据时生效，不覆盖已确认的模型能力。能力解析结果按 `provider + normalized_base_url + model_name` 缓存；显式配置变化时立即失效，提供商元数据按 TTL 刷新，不允许在每次模型请求的热路径同步联网查询。首次使用未知模型时必须记录一次结构化 warning，Debug 请求快照展示容量来源与 fallback 值。若模型服务返回上下文超限错误，运行时应收紧该模型实例的会话级观测上限并触发一次重新装配，而不是原样重试。
+服务默认窗口只在没有显式覆盖或模型能力记录时生效，不覆盖已确认的较小窗口。能力来源通过 Debug 请求快照展示为 `service_ceiling_default`。若模型服务返回上下文超限错误，运行时应收紧该模型实例的会话级观测上限并触发一次重新装配，而不是原样重试。
 
 ### 5.3 大模型、小模型分别解析
 
-Planner、Observation、摘要和图谱通常使用 small tier，它们必须使用小模型自己的 `W_small`，不能继承主模型的 100 万窗口。每个 `SerializedChatRequest` 都要携带解析后的模型标识和预算策略版本，worker 与前台进程计算结果必须一致。
+Planner、Observation、摘要和图谱通常使用 small tier；小模型未独立配置时继承主模型窗口，独立配置但未填写窗口时同样使用 100 万服务默认值。每个 `SerializedChatRequest` 都要携带解析后的模型标识和预算策略版本，worker 与前台进程计算结果必须一致。
 
 ## 6. 动态预算公式
 
@@ -401,7 +402,6 @@ Observation 优先使用 ToolResultEnvelope，而不是每条结果前 2,000 字
 
 ```text
 memory.context_window_tokens                 # 服务级上限，默认 1_000_000
-memory.context_unknown_model_fallback_tokens # 未知模型窗口，默认 131_072
 memory.context_unknown_output_fallback_tokens # 未知模型最大输出，默认 8_192
 memory.context_output_reserve_ratio          # 输出预留比例
 memory.context_safety_margin_ratio            # tokenizer/协议安全边际
@@ -415,7 +415,7 @@ memory.context_budget_policy_version          # 预算策略版本
 
 ### 10.2 删除或弃用
 
-完成迁移后删除以下模型上下文字符配置：
+以下模型上下文字符配置已经删除或停止作为模型可见内容限制使用：
 
 - `agent_tool_registry_result_chars`；
 - `agent_tool_large_result_chars`；
@@ -508,7 +508,7 @@ Debug“上下文拼装”必须展示最终真实请求及预算账本。任何
 
 | 失败模式 | 处理 |
 |---|---|
-| 未知模型能力 | 使用显式保守 fallback，记录 warning，Debug 标出来源；不假定 1M。 |
+| 未填写模型窗口 | 使用 100 万服务默认值，Debug 标出 `service_ceiling_default`；显式较小窗口仍优先。 |
 | tokenizer 不认识模型 | 使用统一 fallback tokenizer并保留安全边际；记录 tokenizer 来源。 |
 | 强制块超过输入预算 | 先缩减工具 schema和外置引用；仍超限则明确失败，不切用户问题或 Skill。 |
 | 单个工具结果巨大 | 使用 structured/head-tail/reference，并提供 cursor。 |
@@ -525,7 +525,7 @@ Debug“上下文拼装”必须展示最终真实请求及预算账本。任何
 
 - 对 32K、128K 和 1M 窗口验算 `W/O/S/B_input`；
 - 分别验证主模型和小模型容量；
-- 未知模型使用 fallback，显式覆盖只允许收紧；
+- 未填写模型窗口使用 1M 服务默认值，显式覆盖可收紧；
 - 最终序列化 token 永不超过 `B_input`；
 - 单个超大最近消息不会导致更早的小消息全部消失；
 - tool call 与 tool result 原子组在所有表示层级保持合法；
@@ -622,6 +622,7 @@ B_input ≈ 119,930
 - 超长内容用结构化表示、head-tail、引用和继续读取解决；
 - Planner 与 Observation 使用结构化工具账本；
 - 资源安全上限与模型上下文预算在配置和命名上明确分离。
+- 未填写模型窗口时使用 100 万服务默认值，不再要求用户先填写才能获得服务容量。
 
 ### 已拒绝
 
@@ -629,7 +630,7 @@ B_input ≈ 119,930
 - 所有工具结果无条件完整注入：会让小模型和复杂工具链不可控；
 - 每个业务模块自行按 `W` 乘一个比例：会把散落常数变成散落比例，根因不变；
 - 只依赖摘要模型：摘要可能失败或遗漏，必须保留完整事实和可继续读取引用；
-- 未知模型默认视为 1M：会把模型服务错误当作正常容量。
+- 未知模型固定回退 128K：与 100 万服务默认值脱节，并制造无意义的用户配置负担。
 
 ## 18. 实施完成后的最终状态
 

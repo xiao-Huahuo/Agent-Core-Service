@@ -1,19 +1,42 @@
-# Agent 上下文与工具结果硬截断穷举清单
+# Agent 上下文与工具结果硬截断迁移清单
 
-## 审计结论
+> 状态：`dynamic-v1` 已实施。下方第 1～5 节保留的是迁移前的穷举基线，用于证明旧硬截断来源已经逐项处理，不代表当前运行行为。
 
-Agent 可见内容的截断由四层叠加产生：
+## 当前生产配置
+
+当前模型可见内容只使用以下集中容量配置，不再由散落字符数决定：
+
+| 配置字段 | 默认值 | 当前作用 |
+|---|---:|---|
+| `memory.context_window_tokens` | 1,000,000 tokens | 服务允许使用的上下文 ceiling。 |
+| 未填写模型窗口 | 1,000,000 tokens | 直接继承 `memory.context_window_tokens` 服务默认值，不再存在 128K fallback。 |
+| `memory.context_unknown_output_fallback_tokens` | 8,192 tokens | 未登记模型的保守最大输出。 |
+| `memory.context_output_reserve_ratio` | 0.065 | 从有效窗口动态推导输出预留。 |
+| `memory.context_safety_margin_ratio` | 0.02 | tokenizer、消息包装与协议安全边际。 |
+| `memory.context_max_single_block_ratio` | 0.20 | 单个弹性候选组的动态软上限。 |
+| `memory.context_compression_trigger_ratio` | 0.80 | 动态压缩触发比例。 |
+| `memory.context_compression_target_ratio` | 0.45 | 动态压缩目标比例。 |
+| `memory.context_budget_policy_version` | `dynamic-v1` | Debug、观测和迁移识别使用的策略版本。 |
+| `model.model_context_window_tokens` / `model.model_max_output_tokens` | 0 / 0 | 主模型能力覆盖；0 表示继续解析能力表或 fallback。 |
+| `model.small_model_context_window_tokens` / `model.small_model_max_output_tokens` | 0 / 0 | 小模型能力覆盖；0 表示继承或继续解析。 |
+| `model.model_capabilities` | `{}` | 按模型名登记明确窗口和最大输出。 |
+
+真实请求统一经过 `ContextBuilder.assemble_request_messages`：固定块先扣除，弹性候选按原子组竞争剩余 token；放不下时按 full、structured、head-tail、reference 降级，最终重新计量并校验 tool call / result 配对。非完整工具结果携带 `content_ref` 与 continuation，可通过 `read_tool_result`、`read_session_attachment` 或原资源范围读取继续获取。
+
+## 迁移前审计结论
+
+迁移前 Agent 可见内容的截断由四层叠加产生：
 
 1. `ContextBuilder` 根据 token 窗口只选择能放入预算的最近历史消息。
 2. `ModelDecisionNode` 在每次真正请求主模型前，再按工具类型和结果新旧程度压缩每条 `ToolMessage`。
 3. Observation 与 Planner 为各自的小模型重新拼装工具结果，并再次做字符/条数预览。
 4. Terminal、Web、Skill、附件、知识文件、识图与图谱抽取等生产端在生成工具结果或内部模型请求时先行截断。
 
-因此，上游工具的较大限制不代表主 Agent 真能看到同样多的内容。普通工具结果默认会在第 2 层收敛到最近 900 字、较旧 240 字，这会导致 Agent 没读到关键尾部后重复调用工具。
+因此，上游工具的较大限制并不代表主 Agent 真能看到同样多的内容。普通工具结果曾在第 2 层收敛到最近 900 字、较旧 240 字，导致 Agent 没读到关键尾部后重复调用工具。
 
 本清单只统计会改变 Agent、Planner、Observation 或 Agent 所调用模型实际可见内容的限制。UI 折叠、日志预览、ID/hash 长度、网络流分块和不丢内容的分页不在范围内。
 
-## 1. 主 Agent 会话上下文
+## 1. 迁移前：主 Agent 会话上下文
 
 | 配置字段 | 默认值 | 生效位置 | 实际作用 |
 |---|---:|---|---|
@@ -28,7 +51,7 @@ Agent 可见内容的截断由四层叠加产生：
 
 历史消息不是按固定条数截断，而是由 `select_recent_messages_within_budget` 从末尾逐条装入 token 预算；遇到第一条放不下的消息即停止继续向前选择。
 
-## 2. ToolMessage 进入主模型前的统一二次压缩
+## 2. 迁移前：ToolMessage 进入主模型前的统一二次压缩
 
 生效入口：`agent_service/agent_core/nodes/model_decision.py::_prepare_messages_for_llm`。
 
@@ -43,7 +66,7 @@ Agent 可见内容的截断由四层叠加产生：
 
 截断方式均为保留前缀，并追加“原始长度/当前保留长度”的压缩标记，不保留尾部。MCP 工具没有单独的隐藏截断，格式化完整结果后同样进入本层的 900/240 字符通用预算。
 
-## 3. Planner、Observation 与工具调用序列
+## 3. 迁移前：Planner、Observation 与工具调用序列
 
 | 配置字段 | 默认值 | 生效位置 | 实际作用 |
 |---|---:|---|---|
@@ -60,7 +83,7 @@ Agent 可见内容的截断由四层叠加产生：
 
 `agent_tool_argument_preview_chars=80`、`agent_tool_summary_chars=200` 和 `agent_event_content_preview_chars=500` 只影响 trace/API 调试展示，不进入模型请求，因此不算 Agent 上下文截断源。
 
-## 4. 工具生产端和工具内部模型请求
+## 4. 迁移前：工具生产端和工具内部模型请求
 
 | 配置字段 | 默认值 | 工具/路径 | 生产端截断 |
 |---|---:|---|---|
@@ -88,7 +111,7 @@ Agent 可见内容的截断由四层叠加产生：
 | `limits.graph_batch_max_chars` | 12,000 字符/批 | 批量图谱抽取 | 合批字符预算。 |
 | `limits.graph_batch_max_sections` | 4 章/批 | 批量图谱抽取 | 单批最多章节数。 |
 
-## 5. 已登记但当前不生效的兼容字段
+## 5. 迁移前已登记但不生效的兼容字段
 
 | 字段 | 默认值 | 当前状态 |
 |---|---:|---|
@@ -110,6 +133,9 @@ Agent 可见内容的截断由四层叠加产生：
 
 ## 验收对应
 
-- TODO 1：4 个遗漏字段已加入 `AgentConfig.BusinessLimitsConfig`，1 个失联字段已接回四个调用点；所有 `limits` 字段自动支持 `AGENT_LIMIT_<字段名大写>` 环境变量覆盖。
-- TODO 2：本文件逐项列出所有当前生效的上下文、ToolMessage、Planner/Observation 和工具生产端限制，并单列不生效兼容字段与排除项。
-- 自动验证：`tests/test_context_tool_truncation_config.py` 使用非默认小值证明 4 个新字段实际控制运行时行为，并检查附件工具四个调用点不再写死 `[:8]`。
+- 根本来源：迁移前四层硬截断仍由第 1～5 节完整留档；当前模型可见容量字段全部收敛到 `AgentConfig` 的模型能力与动态预算配置。
+- 上下文拼装：主 Agent、Simple、Planner、Observation、压缩、结构化生成、图谱与本地识图均使用实际模型容量派生的 token 预算。
+- 工具结果：运行时生成 `ToolResultEnvelope` 并持久化完整事实；非 full 表示包含状态、原始 token 数、引用与继续读取方法。
+- 专项迁移：Terminal 改为显式 head-tail 资源保护；Web、Skill、知识文件、附件、OCR、结构化生成和图谱不再静默保留字符前缀；记忆内容删除改为数据库精确/包含查询。
+- 静态门禁：`tests/test_dynamic_context_budget.py` 检查旧字段、旧 compactor 和关键生产路径固定数字切片不得回归；`tests/test_context_tool_truncation_config.py` 保留对非上下文业务限制的配置消费验证。
+- 界面冒烟：模型能力设置在 [桌面端](dynamic-context-settings-desktop.png)、[平板端](dynamic-context-settings-tablet.png) 与 [移动端](dynamic-context-settings-mobile.png) 均完成真实页面加载、字段回填和响应式布局检查；前端开发代理已对真实后端完成 GET/PUT 验证。

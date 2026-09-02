@@ -241,6 +241,65 @@ def test_agent_stream_token_events_do_not_repeat_dynamic_latency_metadata() -> N
     assert delta_events[1]["metadata"] == {}
 
 
+def test_agent_stream_payload_exposes_stream_diagnostics() -> None:
+    """终态流诊断必须进入公开 metadata，供前端核对修正字符数。"""
+
+    diagnostics = {"final_content_chars": 4, "streamed_content_chars": 4, "reconciled_content_chars": 0}
+    payload = AgentCore._build_stream_payload(
+        node_name="agent",
+        state_update={
+            "messages": [AIMessage(content="回答完成", additional_kwargs={"stream_diagnostics": diagnostics})],
+            "trace": [],
+        },
+    )
+
+    assert payload["metadata"]["stream_diagnostics"] == diagnostics
+    persisted = AgentCore._message_to_create(
+        message=AIMessage(content="回答完成", additional_kwargs={"stream_diagnostics": diagnostics}),
+        user_id="u1",
+        session_id="s1",
+        node_name="agent",
+    )
+    assert persisted is not None
+    assert persisted.metadata_json["stream_diagnostics"] == diagnostics
+
+
+def test_simple_answer_stream_exposes_scheduler_diagnostics(monkeypatch: Any) -> None:
+    """Simple 路径必须与 Graph 路径公开同一份终态流诊断。"""
+
+    diagnostics = {"final_content_chars": 2, "streamed_content_chars": 2, "reconciled_content_chars": 0}
+
+    class FakeMessageService:
+        """记录 simple 路径的正式消息持久化。"""
+
+        def __init__(self) -> None:
+            self.created: list[MessageCreate] = []
+
+        def create_message(self, message: MessageCreate) -> None:
+            self.created.append(message)
+
+    agent = AgentCore(config=make_test_config(), graph=FakeCompiledGraph())
+    monkeypatch.setattr(agent.task_scheduler, "stream_chat", lambda **_kwargs: iter([
+        {"content_delta": "回答"},
+        {
+            "message": AIMessage(content="回答", additional_kwargs={"stream_diagnostics": diagnostics}),
+            "status": "complete",
+            "stream_diagnostics": diagnostics,
+        },
+    ]))
+    message_service = FakeMessageService()
+
+    events = list(agent._stream_simple_answer(
+        messages=[HumanMessage(content="你好")],
+        user_id="u1",
+        session_id="simple-stream",
+        message_service=message_service,  # type: ignore[arg-type]
+    ))
+
+    assert events[-1]["metadata"]["stream_diagnostics"] == diagnostics
+    assert message_service.created[-1].metadata_json["stream_diagnostics"] == diagnostics
+
+
 def test_agent_core_attaches_finalized_change_snapshot_to_live_payload() -> None:
     """最终 SSE 事件必须带上同轮文件变更，不能只写入历史消息。"""
 

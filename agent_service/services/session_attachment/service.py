@@ -331,8 +331,8 @@ class SessionAttachmentService:
     ) -> AttachmentContext:
         """Build session attachment catalog and relevant content snippets for the model."""
 
-        max_total_chars = max_total_chars or self.config.limits.attachment_context_max_chars
-        max_attachment_chars = max_attachment_chars or self.config.limits.attachment_single_max_chars
+        # 兼容旧调用参数，但模型可见容量统一由最终 ContextBuilder token 预算裁决。
+        del max_total_chars, max_attachment_chars
         attachments = self.list_session_attachments(user_id=user_id, session_id=session_id)
         if not attachments:
             return AttachmentContext(content="", citation_map={}, attachment_count=0, injected_count=0)
@@ -348,32 +348,31 @@ class SessionAttachmentService:
         selected_ids = {item.attachment_id for item in selected}
         for index, item in enumerate(attachments, 1):
             marker = " (content injected below)" if item.attachment_id in selected_ids else ""
-            lines.append(f"- [A{index}] {item.filename} | {item.size} bytes | {item.source_type}{marker}")
+            lines.append(
+                f"- [A{index}] {item.filename} | {item.size} bytes | {item.source_type} | "
+                f"attachment://{item.attachment_id}{marker}"
+            )
             citation_map[f"A{index}"] = {
                 "source_uri": item.uri or item.path,
-                "content": item.summary or self._read_text_preview(
-                    item.text_path,
-                    self.config.limits.attachment_preview_chars,
-                ),
+                "content": item.summary or self._read_text_preview(item.text_path, None),
                 "title": item.filename,
                 "source": "session_attachment",
                 "adopted_by_default": True,
             }
 
-        remaining = max_total_chars - sum(len(line) + 1 for line in lines)
         injected_count = 0
-        if selected and remaining > 0:
+        if selected:
             lines.append("Relevant attachment content:")
         for item in selected:
-            if remaining <= 0:
-                break
             attachment_index = attachments.index(item) + 1
-            text = self._read_text_preview(item.text_path, min(max_attachment_chars, remaining))
+            text = self._read_text_preview(item.text_path, None)
             if not text:
                 continue
-            block = f"### [A{attachment_index}] {item.filename}\n{text}"
+            block = (
+                f"### [A{attachment_index}] {item.filename}\n"
+                f"Content ref: attachment://{item.attachment_id}\n{text}"
+            )
             lines.append(block)
-            remaining -= len(block) + 1
             injected_count += 1
         lines.append("--- Session Uploaded Attachments End ---")
         return AttachmentContext(
@@ -582,14 +581,14 @@ class SessionAttachmentService:
         return (target_dir / f"{stem} ({int(time.time())}){suffix}").resolve()
 
     @staticmethod
-    def _read_text_preview(text_path: str, limit: int) -> str:
+    def _read_text_preview(text_path: str, limit: int | None) -> str:
         if not text_path:
             return ""
         path = Path(text_path)
         if not path.is_file():
             return ""
         text = path.read_text(encoding="utf-8", errors="replace").strip()
-        if len(text) <= limit:
+        if limit is None or len(text) <= limit:
             return text
         return text[:limit].rstrip() + "\n...(已截断)"
 

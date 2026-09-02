@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from threading import Event
+from threading import Barrier, Event, Thread
 import time
 
 import pytest
@@ -117,6 +117,41 @@ def test_dsh_child_can_continue_with_same_run_id() -> None:
         manager.close()
 
 
+def test_child_completion_wakeup_claim_is_once_per_turn() -> None:
+    """多个观察者只能有一个领取同一 Turn 的终态唤醒，追问后的新 Turn 可再次领取。"""
+
+    manager = ChildAgentManager()
+    try:
+        record = manager.spawn(
+            contract=_contract(mode="foreground", provider="dsh", session_id="session_dsh"),
+            executor=lambda context: context.goal,
+        )
+
+        barrier = Barrier(3)
+        claims: list[bool] = []
+
+        def claim() -> None:
+            barrier.wait()
+            claims.append(manager.claim_completion_wakeup(record.run_id))
+
+        observers = [Thread(target=claim), Thread(target=claim)]
+        for observer in observers:
+            observer.start()
+        barrier.wait()
+        for observer in observers:
+            observer.join(timeout=1)
+
+        assert sorted(claims) == [False, True]
+        assert manager.claim_completion_wakeup(record.run_id) is False
+
+        manager.continue_child(run_id=record.run_id, prompt="继续检查", mode="foreground")
+
+        assert manager.claim_completion_wakeup(record.run_id) is True
+        assert manager.claim_completion_wakeup(record.run_id) is False
+    finally:
+        manager.close()
+
+
 def test_background_children_run_concurrently_and_queue_results() -> None:
     """后台子 Agent 不阻塞父调用,并且同一父级可并发收集多个结果。"""
 
@@ -198,6 +233,30 @@ def test_wait_for_children_returns_queued_result_immediately() -> None:
         assert result.result == "已经完成"
         assert elapsed < 0.2
     finally:
+        manager.close()
+
+
+def test_wait_for_children_for_session_crosses_parent_run_ids() -> None:
+    """自动唤醒产生新父 run 后，仍能等待同一 session 旧 run 创建的子 Agent。"""
+
+    manager = ChildAgentManager()
+    release = Event()
+    try:
+        record = manager.spawn(
+            contract=_contract(parent_run_id="original-run", session_id="session-1"),
+            executor=lambda context: release.wait(timeout=1) or "完成",
+        )
+        release.set()
+
+        result = manager.wait_for_children_for_session(
+            session_id="session-1",
+            timeout_seconds=2,
+        )
+
+        assert result is not None
+        assert result.run_id == record.run_id
+    finally:
+        release.set()
         manager.close()
 
 

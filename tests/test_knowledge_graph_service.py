@@ -21,6 +21,7 @@ from agent_service.services.knowledge_graph import (
     _batch_graph_sections,
     _extract_graph_section_payloads,
     _graph_progress_doc_entry,
+    _split_graph_section_by_tokens,
     _run_graph_extraction,
     get_graph_extraction_progress,
 )
@@ -130,6 +131,19 @@ def test_graph_section_batches_combine_short_sections_without_reordering() -> No
         ["sec_2", "sec_3"],
         ["sec_4"],
     ]
+
+
+def test_graph_long_section_is_split_by_tokens_without_losing_content() -> None:
+    """长章节必须全部进入 token 子块，不能只抽取固定字符前缀。"""
+
+    section = _section("sec_long", "alpha " * 1_000 + "TAIL_MARKER")
+
+    chunks = _split_graph_section_by_tokens(section, token_limit=100, model_name=None)
+
+    assert len(chunks) > 1
+    assert "".join(chunk.content for chunk in chunks) == section.content
+    assert chunks[-1].content.endswith("TAIL_MARKER")
+    assert all(chunk.section_id.startswith("sec_long::chunk:") for chunk in chunks)
 
 
 def test_graph_batch_extraction_keeps_results_attached_to_sections(tmp_path: Path) -> None:

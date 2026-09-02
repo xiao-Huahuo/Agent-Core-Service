@@ -58,6 +58,8 @@ class SerializedChatRequest:
     small_api_key: str | None = None
     small_base_url: str | None = None
     small_model_name: str | None = None
+    context_window_tokens: int | None = None
+    max_output_tokens: int | None = None
 
     @classmethod
     def from_messages(
@@ -78,6 +80,8 @@ class SerializedChatRequest:
         small_api_key: str | None = None,
         small_base_url: str | None = None,
         small_model_name: str | None = None,
+        context_window_tokens: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> "SerializedChatRequest":
         """从 LangChain messages 构造可序列化请求。"""
 
@@ -97,6 +101,8 @@ class SerializedChatRequest:
             small_api_key=small_api_key,
             small_base_url=small_base_url,
             small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens,
+            max_output_tokens=max_output_tokens,
         )
 
     def to_stream_fields(self) -> dict[str, str]:
@@ -124,6 +130,8 @@ class SerializedChatRequest:
             "small_api_key": self.small_api_key,
             "small_base_url": self.small_base_url,
             "small_model_name": self.small_model_name,
+            "context_window_tokens": self.context_window_tokens,
+            "max_output_tokens": self.max_output_tokens,
         }
 
     @classmethod
@@ -148,6 +156,16 @@ class SerializedChatRequest:
             small_api_key=str(payload["small_api_key"]) if payload.get("small_api_key") else None,
             small_base_url=str(payload["small_base_url"]) if payload.get("small_base_url") else None,
             small_model_name=str(payload["small_model_name"]) if payload.get("small_model_name") else None,
+            context_window_tokens=(
+                int(payload["context_window_tokens"])
+                if payload.get("context_window_tokens") is not None
+                else None
+            ),
+            max_output_tokens=(
+                int(payload["max_output_tokens"])
+                if payload.get("max_output_tokens") is not None
+                else None
+            ),
         )
 
     def restore_messages(self) -> list[BaseMessage]:

@@ -1278,11 +1278,15 @@ def _is_hidden_path(path: Path) -> bool:
 
 
 def _truncate(text: str, limit: int) -> tuple[str, bool]:
-    """按字符数截断输出并返回是否截断。"""
+    """资源安全上限触发时保留 stdout/stderr 头尾和明确省略信息。"""
 
     if len(text) <= limit:
         return text, False
-    return text[:limit] + "\n[output truncated]", True
+    marker = f"\n[resource safety limit omitted {len(text) - limit} characters; head and tail preserved]\n"
+    payload_limit = max(limit - len(marker), 0)
+    head_limit = round(payload_limit * 0.6)
+    tail_limit = payload_limit - head_limit
+    return text[:head_limit] + marker + (text[-tail_limit:] if tail_limit else ""), True
 
 
 def _decode_timeout_stream(value: bytes | str | None) -> str:

@@ -32,6 +32,7 @@ from agent_service.agent_core.runtime.shared import (
 )
 from agent_service.agent_core.runtime.token_usage import extract_token_usage
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.core.context_budget import capacity_overrides_from_mapping
 from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
@@ -106,10 +107,15 @@ class ModelRuntimeMixin:
         small_api_key = llm_config.get("small_api_key") or api_key
         small_base_url = llm_config.get("small_base_url") or base_url
         small_model_name = llm_config.get("small_model_name") or model_name
+        context_window_tokens, max_output_tokens = capacity_overrides_from_mapping(
+            llm_config,
+            model_tier=SMALL_MODEL_TIER,
+        )
         runtime_messages = [SystemMessage(content=system_content), *messages]
         cumulative = ""
         last_sent_content = ""
         final_message: BaseMessage | None = None
+        stream_diagnostics: dict[str, Any] = {}
         user_prompt = ""
         first_delta_sent = False
 
@@ -212,6 +218,8 @@ class ModelRuntimeMixin:
                     small_api_key=small_api_key,
                     small_base_url=small_base_url,
                     small_model_name=small_model_name,
+                    context_window_tokens=context_window_tokens,
+                    max_output_tokens=max_output_tokens,
                     node="agent_simple",
                 ),
                 "call_index": 1,
@@ -243,9 +251,14 @@ class ModelRuntimeMixin:
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
                 small_model_name=small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
             ):
                 if chunk.get("status") == "complete":
                     final_message = chunk.get("message")
+                    diagnostics = chunk.get("stream_diagnostics")
+                    if isinstance(diagnostics, dict):
+                        stream_diagnostics = diagnostics
                     continue
                 reasoning_delta = chunk.get("reasoning_delta", "")
                 if reasoning_delta:
@@ -342,6 +355,7 @@ class ModelRuntimeMixin:
                         "source": "simple_answer_mode",
                         "trace": [simple_trace, safety_output_trace],
                         **({"reasoning_content": cumulative_reasoning} if cumulative_reasoning else {}),
+                        **({"stream_diagnostics": stream_diagnostics} if stream_diagnostics else {}),
                         **citation_metadata,
                     },
                 )
@@ -354,6 +368,7 @@ class ModelRuntimeMixin:
                 "model_name": self._model_name_for_node("agent_simple"),
                 "metadata": {
                     **citation_metadata,
+                    **({"stream_diagnostics": stream_diagnostics} if stream_diagnostics else {}),
                     **latency_metadata(
                         {
                             "simple_model_total_ms": duration_ms,
@@ -563,6 +578,10 @@ class ModelRuntimeMixin:
         small_api_key = llm_config.get("small_api_key") or api_key
         small_base_url = llm_config.get("small_base_url") or base_url
         small_model_name = llm_config.get("small_model_name") or model_name
+        context_window_tokens, max_output_tokens = capacity_overrides_from_mapping(
+            llm_config,
+            model_tier=SMALL_MODEL_TIER,
+        )
         system_prompt = self.config.prompts.agent_mode_router_system_prompt
         user_prompt = (
             f"用户请求:\n{text}\n\n"
@@ -586,6 +605,8 @@ class ModelRuntimeMixin:
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
                 small_model_name=small_model_name,
+                context_window_tokens=context_window_tokens,
+                max_output_tokens=max_output_tokens,
             )
         except Exception:
             logger.warning("小模型 Agent Loop 路由失败,回退到本地规则 | user=%s", user_id, exc_info=True)
@@ -728,18 +749,28 @@ def _rename_session_worker(agent: Any, *, user_id: str, session_id: str) -> str 
         small_api_key = (llm_config.get("small_api_key") or api_key) if llm_config else None
         small_base_url = (llm_config.get("small_base_url") or base_url) if llm_config else None
         small_model_name = (llm_config.get("small_model_name") or model_name) if llm_config else None
+        small_context_tokens, small_output_tokens = capacity_overrides_from_mapping(
+            llm_config,
+            model_tier=SMALL_MODEL_TIER,
+        )
+        large_context_tokens, large_output_tokens = capacity_overrides_from_mapping(
+            llm_config,
+            model_tier=LARGE_MODEL_TIER,
+        )
 
         title = _do_rename_llm_call(agent, rename_prompt, session_id,
             model_tier=SMALL_MODEL_TIER,
             api_key=api_key, base_url=base_url, model_name=model_name,
-            small_api_key=small_api_key, small_base_url=small_base_url, small_model_name=small_model_name)
+            small_api_key=small_api_key, small_base_url=small_base_url, small_model_name=small_model_name,
+            context_window_tokens=small_context_tokens, max_output_tokens=small_output_tokens)
         if title is not None:
             return _persist_rename_title(agent, session_id, title)
 
         logger.info("小模型重命名失败,降级使用大模型 | session=%s", session_id)
         title = _do_rename_llm_call(agent, rename_prompt, session_id,
             model_tier=LARGE_MODEL_TIER,
-            api_key=api_key, base_url=base_url, model_name=model_name)
+            api_key=api_key, base_url=base_url, model_name=model_name,
+            context_window_tokens=large_context_tokens, max_output_tokens=large_output_tokens)
         if title is not None:
             return _persist_rename_title(agent, session_id, title)
         return None
@@ -751,6 +782,7 @@ def _do_rename_llm_call(
     model_tier: str,
     api_key: str | None = None, base_url: str | None = None, model_name: str | None = None,
     small_api_key: str | None = None, small_base_url: str | None = None, small_model_name: str | None = None,
+    context_window_tokens: int | None = None, max_output_tokens: int | None = None,
 ) -> str | None:
     """调用 LLM 生成会话标题,返回标题或 None。"""
     try:
@@ -762,6 +794,7 @@ def _do_rename_llm_call(
             temperature=0.3,
             api_key=api_key, base_url=base_url, model_name=model_name,
             small_api_key=small_api_key, small_base_url=small_base_url, small_model_name=small_model_name,
+            context_window_tokens=context_window_tokens, max_output_tokens=max_output_tokens,
         )
         title = (getattr(response, "content", "") or "").strip()
         if not title:

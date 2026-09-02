@@ -123,6 +123,18 @@ const rawContextJson = computed(() => {
               <span class="metric-label">模型层级</span>
               <span class="metric-value metric-text">{{ selectedSnapshot?.model_tier ?? '—' }}</span>
             </div>
+            <div class="metric-row">
+              <span class="metric-label">有效窗口</span>
+              <span class="metric-value">{{ selectedSnapshot?.context_budget?.effective_window_tokens ?? 0 }}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">最终输入</span>
+              <span class="metric-value">{{ selectedSnapshot?.context_budget?.final_input_tokens ?? 0 }}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">表示降级</span>
+              <span class="metric-value">{{ selectedSnapshot?.context_budget?.representations?.filter(item => item.representation !== 'full').length ?? 0 }}</span>
+            </div>
           </div>
 
           <div v-if="assemblyBlocks.length > 0" class="assembly-list">

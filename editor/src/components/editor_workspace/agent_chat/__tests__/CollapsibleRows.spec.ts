@@ -37,7 +37,7 @@ describe('Agent chat collapsible rows', () => {
     expect(wrapper.get('.think-row__summary').text()).toBe('第一行')
   })
 
-  it('keeps tool result content mounted while collapsed', async () => {
+  it('mounts tool result content only while expanded', async () => {
     const wrapper = mount(ToolCallInline, {
       global: { stubs: { IcIcon: iconStub } },
       props: {
@@ -52,10 +52,11 @@ describe('Agent chat collapsible rows', () => {
     })
 
     expect(wrapper.get('.tool-result-collapse').classes()).not.toContain('open')
-    expect(wrapper.find('.tool-result-content').exists()).toBe(true)
+    expect(wrapper.find('.tool-result-content').exists()).toBe(false)
 
     await wrapper.get('.tool-expand-btn').trigger('click')
     expect(wrapper.get('.tool-result-collapse').classes()).toContain('open')
+    expect(wrapper.get('.tool-result-content').text()).toContain('2026-08-30')
   })
 
   it('toggles the retained child Agent detail region', async () => {
@@ -77,7 +78,9 @@ describe('Agent chat collapsible rows', () => {
     })
 
     expect(wrapper.get('.child-agent-event-detail').classes()).not.toContain('expanded')
+    expect(wrapper.find('.child-agent-event-detail-content').exists()).toBe(false)
     await wrapper.get('.child-agent-event-head').trigger('click')
     expect(wrapper.get('.child-agent-event-detail').classes()).toContain('expanded')
+    expect(wrapper.find('.child-agent-event-detail-content').exists()).toBe(true)
   })
 })

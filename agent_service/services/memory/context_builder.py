@@ -24,6 +24,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.message import MessageOut
+from agent_service.core.context_budget import ContextBudget, ModelCapacity
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService, RetrievalDebugSnapshot
 from agent_service.services.message.service import MessageService
 
@@ -64,6 +65,8 @@ class ContextBuilder:
         model_name: str | None = None,
         tool_definition_tokens: int = 0,
         additional_context_tokens: int = 0,
+        model_context_window_tokens: int | None = None,
+        model_max_output_tokens: int | None = None,
     ) -> list[BaseMessage]:
         """
         构建当前轮 Agent 调用需要的 LangChain messages。
@@ -106,18 +109,9 @@ class ContextBuilder:
         current_message = HumanMessage(
             content=self._format_user_message_content(current_prompt, reference, current_prompt_created_at)
         )
-        available_tokens, _, _ = self.compression_limits(self.config)
-        fixed_tokens = self.estimate_messages_tokens([*messages, current_message], model_name=model_name)
-        history_budget = max(
-            available_tokens - fixed_tokens - max(tool_definition_tokens, 0) - max(additional_context_tokens, 0),
-            0,
-        )
-        selected_history = self.select_recent_messages_within_budget(
-            history_messages,
-            token_budget=history_budget,
-            model_name=model_name,
-        )
-        return [*messages, *selected_history, current_message]
+        del model_context_window_tokens, model_max_output_tokens
+        del model_name, tool_definition_tokens, additional_context_tokens
+        return [*messages, *history_messages, current_message]
 
     def _build_retrieved_context(
         self,
@@ -307,14 +301,23 @@ class ContextBuilder:
         return max(1, total_tokens)
 
     @staticmethod
-    def compression_limits(config: AgentConfig) -> tuple[int, int, int]:
+    def compression_limits(
+        config: AgentConfig,
+        capacity: ModelCapacity | None = None,
+    ) -> tuple[int, int, int]:
         """返回有效窗口、压缩触发线和压缩目标线。"""
 
-        memory = config.memory
-        available = max(memory.context_window_tokens - memory.context_output_reserve_tokens, 1)
-        trigger = max(1, round(available * memory.context_compression_trigger_ratio))
-        target = max(1, min(trigger - 1 if trigger > 1 else 1, round(available * memory.context_compression_target_ratio)))
-        return available, trigger, target
+        resolved_capacity = capacity or ModelCapacity.resolve(
+            config=config,
+            model_name=config.model.model_name or config.model.local_model_name,
+            model_tier="large",
+        )
+        budget = ContextBudget.from_config(config=config, capacity=resolved_capacity)
+        return (
+            budget.input_budget_tokens,
+            budget.compression_trigger_tokens,
+            budget.compression_target_tokens,
+        )
 
     @staticmethod
     def should_compress(
@@ -323,10 +326,11 @@ class ContextBuilder:
         config: AgentConfig,
         model_name: str | None = None,
         extra_tokens: int = 0,
+        capacity: ModelCapacity | None = None,
     ) -> bool:
         """判断当前工作消息是否达到按模型窗口比例计算的压缩触发线。"""
 
-        _, trigger, _ = ContextBuilder.compression_limits(config)
+        _, trigger, _ = ContextBuilder.compression_limits(config, capacity)
         return ContextBuilder.estimate_messages_tokens(messages, model_name=model_name) + max(extra_tokens, 0) >= trigger
 
     @staticmethod
@@ -358,6 +362,364 @@ class ContextBuilder:
         return max(wrapper_tokens - 7, 0)
 
     @staticmethod
+    def assemble_request_messages(
+        *,
+        system_message: SystemMessage | None,
+        messages: list[BaseMessage],
+        config: AgentConfig,
+        capacity: ModelCapacity,
+        tool_definition_tokens: int = 0,
+        requested_output_tokens: int | None = None,
+    ) -> tuple[list[BaseMessage], dict[str, Any]]:
+        """按统一 token 预算组装一次可直接提交给模型的合法请求。"""
+
+        budget = ContextBudget.from_config(
+            config=config,
+            capacity=capacity,
+            requested_output_tokens=requested_output_tokens,
+        )
+        filtered = ContextBuilder._filter_orphaned_tool_messages(list(messages))
+        latest_human_index = max(
+            (index for index, message in enumerate(filtered) if isinstance(message, HumanMessage)),
+            default=-1,
+        )
+        mandatory: list[tuple[int, list[BaseMessage]]] = []
+        if latest_human_index >= 0:
+            mandatory.append((latest_human_index, [filtered[latest_human_index]]))
+
+        fixed_messages = [
+            *([system_message] if system_message is not None else []),
+            *(group for _, messages_group in mandatory for group in messages_group),
+        ]
+        fixed_tokens = (
+            ContextBuilder.estimate_messages_tokens(fixed_messages, model_name=capacity.model_name)
+            + max(tool_definition_tokens, 0)
+        )
+        if fixed_tokens > budget.input_budget_tokens:
+            raise ValueError(
+                "context_capacity_exceeded: 系统规则、当前用户请求、工具定义或强制 Skill "
+                f"共 {fixed_tokens} tokens，超过模型输入预算 {budget.input_budget_tokens} tokens。"
+            )
+
+        groups = ContextBuilder._group_messages(filtered)
+        mandatory_indices = {index for index, _ in mandatory}
+        candidates: list[tuple[int, list[BaseMessage], bool]] = []
+        for start_index, group in groups:
+            if start_index in mandatory_indices:
+                continue
+            current_cycle = latest_human_index >= 0 and start_index > latest_human_index
+            candidates.append((start_index, group, current_cycle))
+        candidates.sort(key=lambda item: (not item[2], -item[0]))
+
+        remaining = budget.input_budget_tokens - fixed_tokens
+        selected: list[tuple[int, list[BaseMessage]]] = list(mandatory)
+        representations: list[dict[str, Any]] = []
+        for start_index, group, current_cycle in candidates:
+            full_tokens = ContextBuilder._messages_payload_tokens(group, model_name=capacity.model_name)
+            block_budget = min(
+                remaining,
+                remaining if current_cycle else budget.max_single_block_tokens,
+            )
+            if block_budget <= 0:
+                break
+            representation = "full"
+            selected_group = group
+            if full_tokens > block_budget:
+                selected_group, representation = ContextBuilder._represent_group_within_budget(
+                    group,
+                    token_budget=block_budget,
+                    model_name=capacity.model_name,
+                )
+            selected_tokens = ContextBuilder._messages_payload_tokens(
+                selected_group,
+                model_name=capacity.model_name,
+            )
+            if not selected_group or selected_tokens > remaining:
+                continue
+            selected.append((start_index, selected_group))
+            remaining -= selected_tokens
+            representations.append({
+                "start_index": start_index,
+                "representation": representation,
+                "original_tokens": full_tokens,
+                "selected_tokens": selected_tokens,
+                "current_cycle": current_cycle,
+            })
+
+        selected.sort(key=lambda item: item[0])
+        assembled_tail = [message for _, group in selected for message in group]
+        assembled = [
+            *([system_message] if system_message is not None else []),
+            *ContextBuilder._filter_orphaned_tool_messages(assembled_tail),
+        ]
+        final_tokens = (
+            ContextBuilder.estimate_messages_tokens(assembled, model_name=capacity.model_name)
+            + max(tool_definition_tokens, 0)
+        )
+        if final_tokens > budget.input_budget_tokens:
+            raise ValueError(
+                "context_capacity_exceeded: 最终序列化请求超过输入预算 "
+                f"{final_tokens}/{budget.input_budget_tokens} tokens。"
+            )
+        report = {
+            **budget.to_dict(),
+            "fixed_tokens": fixed_tokens,
+            "flexible_budget_tokens": budget.input_budget_tokens - fixed_tokens,
+            "final_input_tokens": final_tokens,
+            "remaining_tokens": remaining,
+            "representations": representations,
+        }
+        return assembled, report
+
+    @staticmethod
+    def _group_messages(messages: list[BaseMessage]) -> list[tuple[int, list[BaseMessage]]]:
+        """把 assistant tool call 与其连续 ToolMessage 组成不可拆分原子组。"""
+
+        groups: list[tuple[int, list[BaseMessage]]] = []
+        index = 0
+        while index < len(messages):
+            message = messages[index]
+            group = [message]
+            if isinstance(message, AIMessage) and (getattr(message, "tool_calls", []) or []):
+                cursor = index + 1
+                while cursor < len(messages) and isinstance(messages[cursor], ToolMessage):
+                    group.append(messages[cursor])
+                    cursor += 1
+                groups.append((index, group))
+                index = cursor
+                continue
+            groups.append((index, group))
+            index += 1
+        return groups
+
+    @staticmethod
+    def _messages_payload_tokens(messages: list[BaseMessage], *, model_name: str | None) -> int:
+        """返回消息组扣除请求固定包装后的 token 成本。"""
+
+        return max(ContextBuilder.estimate_messages_tokens(messages, model_name=model_name) - 3, 1)
+
+    @staticmethod
+    def _represent_group_within_budget(
+        group: list[BaseMessage],
+        *,
+        token_budget: int,
+        model_name: str | None,
+    ) -> tuple[list[BaseMessage], str]:
+        """把超大候选组降级为 token 受控的 head-tail 或 reference 表示。"""
+
+        if not group or token_budget <= 0:
+            return [], "omitted"
+        if isinstance(group[0], AIMessage) and len(group) > 1:
+            call_message = group[0]
+            call_tokens = ContextBuilder._messages_payload_tokens([call_message], model_name=model_name)
+            remaining = token_budget - call_tokens
+            if remaining <= 0:
+                return [], "omitted"
+            tool_messages = [message for message in group[1:] if isinstance(message, ToolMessage)]
+            per_tool_budget = max(1, remaining // max(len(tool_messages), 1))
+            represented_tool_results = [
+                ContextBuilder._represent_tool_message(
+                    message,
+                    token_budget=per_tool_budget,
+                    model_name=model_name,
+                )
+                for message in tool_messages
+            ]
+            represented_tools = [message for message, _ in represented_tool_results]
+            represented = [call_message, *represented_tools]
+            if ContextBuilder._messages_payload_tokens(represented, model_name=model_name) <= token_budget:
+                representation_names = {name for _, name in represented_tool_results}
+                if "reference" in representation_names:
+                    group_representation = "reference"
+                elif "head_tail" in representation_names:
+                    group_representation = "head_tail"
+                else:
+                    group_representation = "structured"
+                return represented, group_representation
+            return [], "omitted"
+
+        message = group[0]
+        content = str(getattr(message, "content", "") or "")
+        represented_content = ContextBuilder._head_tail_text(
+            content,
+            token_budget=token_budget,
+            model_name=model_name,
+            reference="message://history",
+        )
+        represented = ContextBuilder._copy_message_with_content(message, represented_content)
+        if ContextBuilder._messages_payload_tokens([represented], model_name=model_name) <= token_budget:
+            return [represented], "head_tail"
+        return [], "omitted"
+
+    @staticmethod
+    def _represent_tool_message(
+        message: ToolMessage,
+        *,
+        token_budget: int,
+        model_name: str | None,
+    ) -> tuple[ToolMessage, str]:
+        """按 structured、head-tail、reference 顺序生成工具结果表示。"""
+
+        content = str(getattr(message, "content", "") or "")
+        tool_call_id = str(getattr(message, "tool_call_id", "") or "")
+        content_ref = f"tool-result://{tool_call_id}"
+        empty_message = ToolMessage(
+            content="",
+            tool_call_id=message.tool_call_id,
+            name=getattr(message, "name", None),
+        )
+        structural_tokens = ContextBuilder._messages_payload_tokens(
+            [empty_message],
+            model_name=model_name,
+        )
+        original_tokens = ContextBuilder.estimate_text_tokens(content, model_name=model_name)
+        additional_kwargs = dict(getattr(message, "additional_kwargs", {}) or {})
+        envelope = additional_kwargs.get("tool_result")
+        if isinstance(envelope, dict):
+            structured_payload = {
+                key: envelope.get(key)
+                for key in (
+                    "tool_name",
+                    "status",
+                    "summary",
+                    "key_facts",
+                    "error",
+                    "content_ref",
+                    "continuation",
+                )
+                if envelope.get(key) not in (None, "", (), [])
+            }
+            structured_payload["original_tokens"] = original_tokens
+            structured_content = json.dumps(structured_payload, ensure_ascii=False, sort_keys=True)
+            structured_kwargs = dict(additional_kwargs)
+            structured_kwargs["tool_result"] = {
+                **envelope,
+                "content_ref": str(envelope.get("content_ref") or content_ref),
+                "representation": "structured",
+                "original_tokens": original_tokens,
+                "continuation": dict(envelope.get("continuation") or {
+                    "supported": True,
+                    "method": "read_tool_result",
+                }),
+            }
+            structured_message = ToolMessage(
+                content=structured_content,
+                tool_call_id=message.tool_call_id,
+                name=getattr(message, "name", None),
+                additional_kwargs=structured_kwargs,
+            )
+            if ContextBuilder._messages_payload_tokens(
+                [structured_message],
+                model_name=model_name,
+            ) <= token_budget:
+                return structured_message, "structured"
+
+        represented_content = ContextBuilder._head_tail_text(
+            content,
+            token_budget=max(token_budget - structural_tokens, 1),
+            model_name=model_name,
+            reference=content_ref,
+        )
+        representation = "reference" if represented_content.startswith("[完整内容:") else "head_tail"
+        additional_kwargs["tool_result"] = {
+            **dict(additional_kwargs.get("tool_result") or {}),
+            "content_ref": content_ref,
+            "representation": representation,
+            "original_tokens": original_tokens,
+            "continuation": {"supported": True, "method": "read_tool_result"},
+        }
+        represented_message = ToolMessage(
+            content=represented_content,
+            tool_call_id=message.tool_call_id,
+            name=getattr(message, "name", None),
+            additional_kwargs=additional_kwargs,
+        )
+        if ContextBuilder._messages_payload_tokens(
+            [represented_message],
+            model_name=model_name,
+        ) <= token_budget:
+            return represented_message, representation
+
+        reference_content = f"[完整内容: {content_ref}；原始 tokens: {original_tokens}；使用 read_tool_result 继续读取。]"
+        additional_kwargs["tool_result"] = {
+            **dict(additional_kwargs.get("tool_result") or {}),
+            "representation": "reference",
+        }
+        return ToolMessage(
+            content=reference_content,
+            tool_call_id=message.tool_call_id,
+            name=getattr(message, "name", None),
+            additional_kwargs=additional_kwargs,
+        ), "reference"
+
+    @staticmethod
+    def estimate_text_tokens(text: str, *, model_name: str | None = None) -> int:
+        """使用与消息计量相同的 tokenizer 返回纯文本 token 数。"""
+
+        encoding = ContextBuilder._encoding_for_model(model_name)
+        return len(encoding.encode(text))
+
+    @staticmethod
+    def _head_tail_text(
+        text: str,
+        *,
+        token_budget: int,
+        model_name: str | None,
+        reference: str,
+    ) -> str:
+        """在 token 预算内保留文本头尾，并明确给出完整内容引用。"""
+
+        encoding = ContextBuilder._encoding_for_model(model_name)
+        tokens = encoding.encode(text)
+        if len(tokens) <= token_budget:
+            return text
+        marker = (
+            "\n\n[中间内容因本次模型 token 预算未直接注入；"
+            f"完整内容: {reference}；原始 tokens: {len(tokens)}；"
+            "使用 read_tool_result 继续读取。]\n\n"
+        )
+        marker_tokens = encoding.encode(marker)
+        payload_budget = token_budget - len(marker_tokens)
+        if payload_budget <= 0:
+            reference_text = f"[完整内容: {reference}；原始 tokens: {len(tokens)}]"
+            return encoding.decode(encoding.encode(reference_text)[:token_budget])
+        head_count = max(1, round(payload_budget * 0.6))
+        tail_count = max(payload_budget - head_count, 0)
+        return encoding.decode(tokens[:head_count]) + marker + encoding.decode(tokens[-tail_count:] if tail_count else [])
+
+    @staticmethod
+    def _copy_message_with_content(message: BaseMessage, content: str) -> BaseMessage:
+        """保留消息结构字段，仅替换本次请求中的文本表示。"""
+
+        if isinstance(message, HumanMessage):
+            return HumanMessage(content=content, additional_kwargs=dict(message.additional_kwargs))
+        if isinstance(message, AIMessage):
+            return AIMessage(
+                content=content,
+                tool_calls=list(getattr(message, "tool_calls", []) or []),
+                additional_kwargs=dict(message.additional_kwargs),
+            )
+        if isinstance(message, ToolMessage):
+            return ToolMessage(
+                content=content,
+                tool_call_id=message.tool_call_id,
+                name=getattr(message, "name", None),
+                additional_kwargs=dict(message.additional_kwargs),
+            )
+        if isinstance(message, SystemMessage):
+            return SystemMessage(content=content, additional_kwargs=dict(message.additional_kwargs))
+        return message
+
+    @staticmethod
+    def _encoding_for_model(model_name: str | None) -> Any:
+        """返回模型 tokenizer；未知兼容模型统一回退到 o200k_base。"""
+
+        try:
+            return tiktoken.encoding_for_model(model_name) if model_name else tiktoken.get_encoding("o200k_base")
+        except KeyError:
+            return tiktoken.get_encoding("o200k_base")
+
+    @staticmethod
     def select_recent_messages_within_budget(
         messages: list[BaseMessage],
         *,
@@ -366,18 +728,16 @@ class ContextBuilder:
     ) -> list[BaseMessage]:
         """从完整历史末尾选择 token 预算允许的最大安全消息后缀。"""
 
-        selected_reversed: list[BaseMessage] = []
+        selected_groups: list[tuple[int, list[BaseMessage]]] = []
         selected_tokens = 3
-        for message in reversed(messages):
-            message_tokens = max(
-                ContextBuilder.estimate_messages_tokens([message], model_name=model_name) - 3,
-                1,
-            )
-            if selected_tokens + message_tokens > token_budget:
-                break
-            selected_reversed.append(message)
-            selected_tokens += message_tokens
-        selected = list(reversed(selected_reversed))
+        for start_index, group in reversed(ContextBuilder._group_messages(messages)):
+            group_tokens = ContextBuilder._messages_payload_tokens(group, model_name=model_name)
+            if selected_tokens + group_tokens > token_budget:
+                continue
+            selected_groups.append((start_index, group))
+            selected_tokens += group_tokens
+        selected_groups.sort(key=lambda item: item[0])
+        selected = [message for _, group in selected_groups for message in group]
         return ContextBuilder._filter_orphaned_tool_messages(selected)
 
     @staticmethod
@@ -401,7 +761,7 @@ class ContextBuilder:
         config: AgentConfig,
         model_name: str | None = None,
         extra_tokens: int = 0,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """统计实际发送给模型的序列化消息，并返回前端可直接展示的预算数据。"""
 
         converted: list[BaseMessage] = []
@@ -416,12 +776,19 @@ class ContextBuilder:
                 converted.append(ToolMessage(content=content, tool_call_id=str(message.get("tool_call_id") or "")))
             else:
                 converted.append(HumanMessage(content=content))
-        available, trigger, target = ContextBuilder.compression_limits(config)
+        capacity = ModelCapacity.resolve(
+            config=config,
+            model_name=model_name or config.model.local_model_name,
+            model_tier="large",
+        )
+        budget = ContextBudget.from_config(config=config, capacity=capacity)
         return {
             "current_tokens": ContextBuilder.estimate_messages_tokens(converted, model_name=model_name) + max(extra_tokens, 0),
-            "max_context_tokens": available,
-            "trigger_tokens": trigger,
-            "target_tokens": target,
+            "max_context_tokens": budget.effective_window_tokens,
+            "input_budget_tokens": budget.input_budget_tokens,
+            "trigger_tokens": budget.compression_trigger_tokens,
+            "target_tokens": budget.compression_target_tokens,
+            "capacity_source": budget.capacity_source,
         }
 
     @staticmethod
@@ -531,7 +898,12 @@ class ContextBuilder:
                 additional_kwargs=additional_kwargs,
             )
         if message.role == "tool":
-            return ToolMessage(content=message.content, tool_call_id=message.tool_call_id or "")
+            tool_result = (message.metadata_json or {}).get("tool_result")
+            return ToolMessage(
+                content=message.content,
+                tool_call_id=message.tool_call_id or "",
+                additional_kwargs={"tool_result": tool_result} if isinstance(tool_result, dict) else {},
+            )
         if message.role == "system":
             return SystemMessage(content=message.content)
         raise ValueError(f"不支持的消息角色: {message.role}")

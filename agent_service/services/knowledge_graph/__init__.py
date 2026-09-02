@@ -13,5 +13,6 @@ from agent_service.services.knowledge_graph.service import (
     _graph_progress_doc_entry,
     _run_graph_extraction,
     _set_dedup_progress,
+    _split_graph_section_by_tokens,
     _update_graph_progress,
 )

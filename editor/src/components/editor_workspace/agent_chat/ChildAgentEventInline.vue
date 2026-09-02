@@ -96,7 +96,7 @@ const shortRunId = computed(() => {
 
     <div class="child-agent-event-detail" :class="{ expanded }">
       <div class="child-agent-event-detail-inner">
-      <div class="child-agent-event-detail-content">
+      <div v-if="expanded" class="child-agent-event-detail-content">
       <div class="child-agent-event-grid">
         <div>
           <span>ID</span>

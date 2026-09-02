@@ -9,15 +9,19 @@
 from __future__ import annotations
 
 from io import BytesIO
+import json
 from pathlib import Path
 import threading
 import time
+from types import SimpleNamespace
 
 from PIL import Image
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.rag.image_ocr import ImageOcrResult, ImageOcrService
 from agent_service.services.session_attachment.service import SessionAttachmentService
+from agent_service.tools.builtin.knowledge import read_session_attachment
+from agent_service.tools.runtime_context import clear_tool_runtime, set_tool_runtime
 from tests.db_test_utils import create_test_engine
 
 
@@ -231,3 +235,52 @@ def test_attachment_uri_resolves_exact_session_file_instead_of_same_basename(tmp
 
     assert first_path.read_bytes() == first_bytes
     assert second_path.read_bytes() == second_bytes
+
+
+def test_attachment_content_reference_supports_cursor_continuation(tmp_path: Path) -> None:
+    """attachment:// 引用必须按 cursor 读取正式解析正文，而不是重新上传附件。"""
+
+    config = AgentConfig.load_config(
+        {"storage": {"base_data_dir": str(tmp_path / "runtime"), "sqlite_path": str(tmp_path / "runtime" / "db" / "attachments.db")}},
+        load_env=False,
+        ensure_directories=True,
+        ensure_models=False,
+    )
+    engine = create_test_engine(f"sqlite:///{tmp_path / 'runtime' / 'db' / 'attachments.db'}")
+    service = SessionAttachmentService(
+        config=config,
+        engine=engine,
+        create_tables=False,
+        settings_service=_SettingsStub(tmp_path / "knowledge"),  # type: ignore[arg-type]
+    )
+    content = "\n".join(f"line-{index}" for index in range(12)).encode("utf-8")
+    uploaded = service.upload_file(
+        user_id="u1",
+        session_id="s1",
+        filename="notes.txt",
+        content=content,
+        mime_type="text/plain",
+    )
+    _wait_for_processing(service, str(uploaded["attachment_id"]))
+    attachment_record = service.list_session_attachments(user_id="u1", session_id="s1")[0]
+    parsed_lines = Path(attachment_record.text_path).read_text(encoding="utf-8").splitlines()
+    set_tool_runtime(
+        config=config,
+        user_id="u1",
+        session_id="s1",
+        database_engine=engine,
+        retrieval_service=SimpleNamespace(),  # type: ignore[arg-type]
+        memory_service=SimpleNamespace(engine=engine),  # type: ignore[arg-type]
+        embedding_service=SimpleNamespace(),  # type: ignore[arg-type]
+    )
+    try:
+        payload = json.loads(read_session_attachment(
+            f"attachment://{uploaded['attachment_id']}",
+            cursor=4,
+            end_line=8,
+        ))
+    finally:
+        clear_tool_runtime()
+
+    assert payload["content"].splitlines() == parsed_lines[4:8]
+    assert payload["next_cursor"] == 8
