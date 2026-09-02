@@ -493,24 +493,30 @@ DeepSeek 接入使用专用适配器保留 `reasoning_content`,并在带工具�
    * 上下文压缩节点 `compress`
 
 #### 多Agent能力
-Agent可以召唤子Agent,采用"**Agent蜂群**"(父子Agent)设计模式.
-子 Agent 由主Agent启动，主Agent送给子Agent一个"子任务合同"(你是谁、要做什么、能用什么、不能做什么、最后交付什么),子Agent完成任务后,任务结果进入主Agent的消息队列(内存queue).子Agent的生命周期:
+Agent可以召唤子Agent,采用"**Agent蜂群**"(父子Agent)设计模式.子Agent由主Agent启动,并接收包含角色、目标、可用工具、权限边界和交付格式的"子任务合同".子Agent完成后,结果进入按父Agent隔离的内存队列.生命周期如下:
+
 ```
 created → running → completed
          ↘ failed
          ↘ stopped
 ```
-- 主Agent可选择的真实子Agent类型为 `explore`、`dsh`、`coding`: `explore`用于只读调查;`dsh`使用内置 DeepSeek Harness Runtime完成代码任务;`coding`是DSH未启用时的MW原生代码后备.
-- 子Agent在独立于父Agent的线程中进行,拥有独立的上下文.
-- Native子Agent的工具取父Agent授权范围与父Agent自身能力的交集;DSH子Agent使用与权限模式对应的固定 `dsh.read/search/edit/pwsh/git/test`能力.**主Agent不能授予自己没有的能力**。
-- 子Agent分为前台和后台两种模式(子Agent的目标,工具与权限,前后台,工作状态和结果都需要在前端展示,但过程不必显示在前端):
-  - 前台子Agent(同步阻塞): 前台子Agent阻塞主Agent,主Agent在等待子Agent的工作结果完成之前一直等待.适合任务有前后依赖的情形.
-  - 后台子Agent(异步蜂群): 后台子Agent不阻塞主Agent,主Agent可以召唤多个后台子Agent并行做事,且在此期间主Agent可以继续做其他事情.主Agent可以查看后台任务("显式汇合",主Agent可以等子Agent)，也可以停止子Agent,子Agent收到父Agent的信号(终止/者信息调整)后做出响应(立即终止/将信息注入上下文).
-- 子Agent不能召唤其他子Agent.
+
+主Agent可选择的真实子Agent类型为 `explore`、`dsh`、`coding`:
+
+- `explore`用于只读调查;
+- `dsh`使用内置 DeepSeek Harness Runtime完成代码任务;
+- `coding`是DSH未启用时的MW原生代码后备.
+
+子Agent在线程池中独立运行,拥有独立上下文.沙盒权限不能高于父Agent;Native子Agent的工具取父Agent授权范围与父Agent自身能力的交集,DSH子Agent则使用与权限模式对应的固定 `dsh.read/search/edit/pwsh/git/test` 能力.**主Agent不能授予自己没有的能力**,子Agent也不能继续召唤其他子Agent.
+
+- 子Agent分为前台和后台两种模式:
+  - 前台子Agent(同步阻塞):主Agent等待该子Agent完成后再继续,适合有前后依赖的任务.
+  - 后台子Agent(异步蜂群):不阻塞主Agent,可以并行启动多个子Agent;主Agent可继续处理其他工作,随后显式等待结果,也可请求停止仍在运行的子Agent.
 - 角色与身份: `agent_type`是模型必须显式选择的真实运行类型;旧的category/provider只作为内部兼容字段,不再暴露给模型。主Agent可以为子Agent起名,不命名时按类型自动生成递增名;每个子Agent按运行ID稳定分配一个头像,整个会话期间保持不变,方便持续追踪同一任务。
-- 后台显式汇合:主Agent召唤后台子Agent后,可以反复调用"等待子Agent"工具逐个收取结果。该工具一次返回一个子Agent的终态结果,可以指定只等待某些子Agent,也可以等待全部;结果队列有货时立即返回,没有则阻塞到下一个结果或超时。只要还有子Agent处于 created/running,主Agent会继续等待,直到全部进入终态才汇总最终回答。
-- 实时可见:子Agent的创建、开始、完成、失败、停止、上下文更新等生命周期事件实时推送到主Agent对话流,对话区渲染为可展开的事件条,左侧圆点颜色表示当前状态,展开可查看目标、权限、工具范围、阶段摘要、产出结果和错误信息。侧边栏把同一目标的多次召唤合并成一张任务卡片,显示头像、名字、类别、前后台和状态,展开可查看每次运行的详细记录,运行中的子Agent可直接点击停止。后台子Agent在主Agent流结束后才完成时,系统会自动补一条完成事件条提醒,这一机制称为唤醒;已在流内实时推送过的终态事件不会再次提醒,避免重复记录。
-- 权限与隔离:子Agent的沙盒权限不能高于父Agent,可用工具取"父Agent授权的工具"与"父Agent自身工具"的交集,主Agent无法授予自己没有的能力。主Agent可停止子Agent,子Agent在协作式安全检查点响应停止信号立即终止,也可以向运行中的子Agent注入上下文更新,后者在下一个检查点读取。后台子Agent在线程池中并行执行互不阻塞,各会话的结果与事件队列相互隔离。
+- 后台显式汇合:主Agent召唤后台子Agent后,反复调用"等待子Agent"工具逐个收取结果。该工具每次最多返回一个终态结果;可以限定run ID,不指定时则等待当前范围内任意一个子Agent。结果已入队时立即返回,否则阻塞到下一个结果或超时。只要目标范围内仍有子Agent处于 `created` 或 `running`,主Agent就继续等待,全部进入终态后再汇总最终回答。
+- 可见性:创建、开始、完成、失败和停止等生命周期事件实时进入主Agent对话流,并渲染为可展开的事件条。子Agent侧边栏每2秒刷新一次状态,按目标合并任务卡片,展示头像、名字、类别、前后台模式和状态;完整的Native子Agent对话可在独立抽屉查看,DSH执行过程可通过只读Web查看。后台子Agent在主Agent流结束后才完成时,系统会补充一条完成事件;已经在流内推送的终态事件不会重复提醒。
+- 运行控制:主Agent可请求停止子Agent,子Agent会在协作式安全检查点响应。管理层还保留上下文更新消息接口,但当前Native和DSH正式执行器尚未消费这些更新,因此运行中上下文注入不作为现有可用能力。
+
 ##### DSH 特殊子Agent
 
 “基础设置 → 启用DSH”默认关闭。启用后,代码修改、命令、Git、测试和构建任务统一使用`agent_type=dsh`;关闭时使用`agent_type=coding`作为Native后备。`dsh`和`coding`都必须提供工作区绝对路径,且权限不能高于父Agent。
