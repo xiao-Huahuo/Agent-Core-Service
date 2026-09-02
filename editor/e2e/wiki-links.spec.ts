@@ -17,7 +17,13 @@ test('Obsidian wiki links suggest, navigate, highlight, and recursively embed', 
       body: JSON.stringify(body),
     })
     if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' })
+    if (url.pathname === '/settings/models/management') return json({ models: [] })
     if (url.pathname === '/settings/models/status') return json({ embedding: 'ready', rerank: 'ready' })
+    if (url.pathname === '/favorites') return json({ favorites: [] })
+    if (url.pathname === '/privacy') return json({ privacy: [] })
+    if (url.pathname === '/sessions') return json([])
+    if (url.pathname === '/todo/list') return json([])
+    if (url.pathname === '/automation/list') return json([])
     if (url.pathname === '/settings/profile') return json({
       user_id: 'wiki-user', knowledge_dir: 'D:/Knowledge', active_library_id: 'default',
       knowledge_libraries: [{ library_id: 'default', name: 'Default', knowledge_dir: 'D:/Knowledge', is_active: true }],
@@ -53,6 +59,8 @@ test('Obsidian wiki links suggest, navigate, highlight, and recursively embed', 
   })))
   await page.goto('/')
   await page.getByRole('button', { name: 'Files' }).click()
+  await page.getByRole('button', { name: '刷新文件树' }).click()
+  await page.getByText('notes', { exact: true }).click()
   await page.getByText('source.md', { exact: true }).first().click()
 
   const editor = page.locator('.code-editor-input')
@@ -74,10 +82,11 @@ test('Obsidian wiki links suggest, navigate, highlight, and recursively embed', 
 
   await page.getByRole('button', { name: 'Preview' }).click()
   await expect(page.locator('.wiki-link')).toHaveText('打开目标章节')
-  await expect(page.locator('.wiki-embed table')).toContainText('MetaWeave')
-  await expect(page.locator('.wiki-embed .katex')).toHaveCount(2)
-  await expect(page.locator('.wiki-embed .katex-error')).toHaveCount(0)
-  await expect(page.locator('.wiki-embed')).not.toContainText('ParseError')
+  const targetEmbed = page.locator('.wiki-embed[data-wiki-path="notes/target.md"]')
+  await expect(targetEmbed.locator('table')).toContainText('MetaWeave')
+  await expect(targetEmbed.locator('.katex')).toHaveCount(2)
+  await expect(targetEmbed.locator('.katex-error')).toHaveCount(0)
+  await expect(targetEmbed).not.toContainText('ParseError')
   await expect(page.locator('.wiki-embed-image')).toBeVisible()
   await expect(page.locator('.wiki-embed-limit')).toContainText('5 层上限')
   await page.screenshot({ path: testInfo.outputPath('wiki-links-preview.png'), fullPage: true })
