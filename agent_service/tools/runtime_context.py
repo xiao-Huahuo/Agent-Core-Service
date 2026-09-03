@@ -59,6 +59,7 @@ class ToolRuntimeState:
     change_service: AgentChangeService | None = None
     skill_service: SkillService | None = None
     settings_service: SettingsService | None = None
+    tool_services: dict[str, Any] = field(default_factory=dict)
     message_service: Any = None
     database_engine: Engine | None = None
     agent_access_mode: str = AGENT_ACCESS_SANDBOX
@@ -89,6 +90,7 @@ def set_tool_runtime(
     change_service: AgentChangeService | None = None,
     skill_service: Any = None,
     settings_service: Any = None,
+    tool_services: dict[str, Any] | None = None,
     message_service: Any = None,
     database_engine: Any = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
@@ -127,6 +129,7 @@ def set_tool_runtime(
         change_service=change_service,
         skill_service=skill_service,
         settings_service=settings_service,
+        tool_services=dict(tool_services or {}),
         message_service=message_service,
         database_engine=database_engine or getattr(resolved_memory_service, "engine", None),
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
@@ -411,6 +414,15 @@ def get_tool_runtime() -> ToolRuntimeState:
     if state is None:
         raise RuntimeError("当前工具调用缺少 Agent 运行时上下文。")
     return state
+
+
+def get_tool_service(name: str) -> Any:
+    """返回应用生命周期显式注入的工具业务服务，不依赖 REST 请求上下文。"""
+
+    service = get_tool_runtime().tool_services.get(name)
+    if service is None:
+        raise RuntimeError(f"工具业务服务未初始化: {name}")
+    return service
 
 
 def normalize_agent_access_mode(value: str | None) -> str:

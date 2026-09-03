@@ -749,6 +749,7 @@ class GraphRunnerMixin:
                 change_service=self.change_service,
                 skill_service=self.skill_service,
                 settings_service=self.settings_service,
+                tool_services=self.tool_services,
                 message_service=message_service,
                 database_engine=getattr(self.settings_service, "engine", None),
                 citation_map=_citation_map,

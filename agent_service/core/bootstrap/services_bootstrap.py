@@ -230,6 +230,18 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         agent=agent,
         session_service=session_service,
     )
+    agent.tool_services = {
+        "knowledge_library": knowledge_library_service,
+        "knowledge_graph": knowledge_graph_service,
+        "git": git_service,
+        "library": library_service,
+        "skill": skill_service,
+        "feedback": feedback_service,
+        "component_library": component_library_service,
+        "favorite": favorite_service,
+        "smart_form": smart_form_service,
+        "structured_generation": structured_generation_service,
+    }
     return ApplicationServices(
         config=config,
         agent=agent,

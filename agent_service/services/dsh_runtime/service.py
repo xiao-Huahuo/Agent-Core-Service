@@ -120,7 +120,7 @@ class DshRuntimePackageManager:
             version_dir = self._installed_version_dir()
             self._assert_managed_path(version_dir)
             if version_dir.exists():
-                shutil.rmtree(version_dir)
+                self._remove_tree(version_dir)
             self.current_file.unlink(missing_ok=True)
             self._set_progress("missing", "尚未安装")
             return self.get_management_status()
@@ -242,7 +242,7 @@ class DshRuntimePackageManager:
             destination = self.versions_dir / self.config.dsh.runtime_version
             self._assert_managed_path(destination)
             if destination.exists():
-                shutil.rmtree(destination)
+                self._remove_tree(destination)
             os.replace(staging, destination)
             self._write_current(manifest)
             self._set_progress("ready", "可用", processed_bytes=0, total_bytes=0, progress=None)
@@ -253,7 +253,7 @@ class DshRuntimePackageManager:
             self._set_progress("failed", str(exc))
         finally:
             if staging.exists():
-                shutil.rmtree(staging, ignore_errors=True)
+                self._remove_tree(staging, ignore_errors=True)
             with self._lock:
                 self._worker = None
 
@@ -305,10 +305,11 @@ class DshRuntimePackageManager:
                 if target != root and root not in target.parents:
                     raise ValueError("DSH Runtime 压缩包包含越界路径")
                 if entry.is_dir():
-                    target.mkdir(parents=True, exist_ok=True)
+                    self._windows_io_path(target).mkdir(parents=True, exist_ok=True)
                     continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with bundle.open(entry) as source, target.open("wb") as output:
+                io_target = self._windows_io_path(target)
+                io_target.parent.mkdir(parents=True, exist_ok=True)
+                with bundle.open(entry) as source, io_target.open("wb") as output:
                     while True:
                         if self._cancel.is_set():
                             raise _InstallCancelled
@@ -417,7 +418,7 @@ class DshRuntimePackageManager:
         """以磁盘事实修正非运行中状态。"""
 
         if not update_working and self._progress["status"] in {
-            "verifying", "extracting", "installing", "repairing", "cancelling",
+            "verifying", "extracting", "installing", "repairing", "cancelling", "failed",
         }:
             return
         if self._runtime_executable() is not None:
@@ -472,6 +473,21 @@ class DshRuntimePackageManager:
             raise ValueError("拒绝操作 DSH受管根目录之外的路径")
 
     @staticmethod
+    def _windows_io_path(path: Path) -> Path:
+        """在 Windows 为受管绝对路径添加扩展前缀，解除 MAX_PATH 限制。"""
+
+        resolved = path.resolve()
+        if os.name == "nt" and not str(resolved).startswith("\\\\?\\"):
+            return Path(f"\\\\?\\{resolved}")
+        return resolved
+
+    @classmethod
+    def _remove_tree(cls, path: Path, *, ignore_errors: bool = False) -> None:
+        """递归删除受管目录，并兼容其中超过 MAX_PATH 的 Node 依赖。"""
+
+        shutil.rmtree(cls._windows_io_path(path), ignore_errors=ignore_errors)
+
+    @staticmethod
     def _verify_digest(path: Path, expected: str) -> None:
         """流式计算文件 SHA-256。"""
 
@@ -490,10 +506,14 @@ class DshRuntimePackageManager:
             return 0, 0
         size = 0
         count = 0
-        for item in path.rglob("*"):
-            if item.is_file():
-                size += item.stat().st_size
-                count += 1
+        try:
+            scan_root = DshRuntimePackageManager._windows_io_path(path)
+            for item in scan_root.rglob("*"):
+                if item.is_file():
+                    size += item.stat().st_size
+                    count += 1
+        except OSError:
+            return 0, 0
         return size, count
 
 

@@ -59,15 +59,12 @@ def web_search(
     configured_max = config.get("web_search_max_results", limits.default_web_search_max_results) or limits.default_web_search_max_results
     effective_max = max(1, configured_max)
 
-    if not proxy_url:
-        return "搜索失败：未配置代理地址。国内访问 DuckDuckGo 需要代理，请在设置页面的「联网搜索」中填写代理地址（如 http://127.0.0.1:7890）。"
-
     try:
         from ddgs import DDGS
         import time
         raw_results = []
         for attempt in range(limits.web_search_retry_count):
-            with DDGS(proxy=proxy_url, timeout=limits.web_search_timeout_seconds) as ddgs:
+            with DDGS(proxy=proxy_url or None, timeout=limits.web_search_timeout_seconds) as ddgs:
                 raw_results = list(ddgs.text(
                     query,
                     region=region,
@@ -181,15 +178,12 @@ def web_image_search(
     configured_max = config.get("web_search_max_results", limits.default_web_search_max_results) or limits.default_web_search_max_results
     effective_max = max(1, configured_max)
 
-    if not proxy_url:
-        return "搜索失败：未配置代理地址。国内访问 DuckDuckGo 需要代理，请在设置页面的「联网搜索」中填写代理地址（如 http://127.0.0.1:7890）。"
-
     try:
         from ddgs import DDGS
         import time
         raw_results = []
         for attempt in range(limits.web_search_retry_count):
-            with DDGS(proxy=proxy_url, timeout=limits.web_search_timeout_seconds) as ddgs:
+            with DDGS(proxy=proxy_url or None, timeout=limits.web_search_timeout_seconds) as ddgs:
                 raw_results = list(ddgs.images(
                     query,
                     region=region,

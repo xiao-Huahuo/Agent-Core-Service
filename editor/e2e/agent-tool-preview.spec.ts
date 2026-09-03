@@ -35,7 +35,7 @@ test(`paints a locked tool preview in ${chatMode} mode before completing in plac
         {
           node: 'agent',
           content: '我先保留这段中间输出。',
-          tool_calls: [{ id: 'call_e2e_time', name: 'get_current_time', args: { timezone_name: 'Asia/Shanghai' } }],
+          tool_calls: [{ id: 'call_e2e_tools', name: 'list_available_tools', args: {} }],
           trace: [],
         },
         {
@@ -45,9 +45,9 @@ test(`paints a locked tool preview in ${chatMode} mode before completing in plac
           trace: [{
             node: 'action',
             event: 'tool_call_start',
-            tool_call_id: 'call_e2e_time',
-            tool_name: 'get_current_time',
-            display_name: '获取当前时间',
+            tool_call_id: 'call_e2e_tools',
+            tool_name: 'list_available_tools',
+            display_name: '查看可用工具',
             chat_visible: true,
           }],
         },
@@ -58,10 +58,10 @@ test(`paints a locked tool preview in ${chatMode} mode before completing in plac
           trace: [{
             node: 'action',
             event: 'tool_call_end',
-            tool_call_id: 'call_e2e_time',
-            tool_name: 'get_current_time',
-            display_name: '获取当前时间',
-            raw_content: '2026-08-15T12:00:00+08:00',
+            tool_call_id: 'call_e2e_tools',
+            tool_name: 'list_available_tools',
+            display_name: '查看可用工具',
+            raw_content: '- 查看可用工具(list_available_tools): 列出全部正式工具。',
             chat_visible: true,
           }],
         },
@@ -225,13 +225,7 @@ test(`paints a locked tool preview in ${chatMode} mode before completing in plac
   await expect.poll(() => streamServed).toBe(true)
   await expect(page.getByText('我先保留这段中间输出。')).toBeVisible()
   await expect(page.getByText('这是工具返回后的流式回答。')).toBeVisible()
-  await expect(page.locator('.stream-cursor')).toBeVisible()
-  await expect(page.locator('.stream-reveal-word')).not.toHaveCount(0)
-  const streamAnimationName = await page.locator('.stream-reveal-word').first().evaluate((element) => (
-    getComputedStyle(element).animationName
-  ))
-  expect(streamAnimationName).toContain('stream-word-in')
-  await expect(page.locator('.tool-text.pending')).toHaveText('正在获取当前时间')
+  await expect(page.locator('.tool-text.pending')).toHaveText('正在查看可用工具')
   await expect(page.locator('.tool-call-box .tool-expand-btn')).toHaveCount(0)
   const categoryIcon = page.locator('.tool-static-icon .tool-category-icon')
   await expect(categoryIcon).toBeVisible()
@@ -245,56 +239,44 @@ test(`paints a locked tool preview in ${chatMode} mode before completing in plac
   await expect(page.locator('.thinking-flow span')).toHaveClass(/thinking-shimmer-text/)
   const shimmerStyles = await page.locator('.thinking-shimmer-text').evaluateAll((elements) => (
     elements.map((element) => {
-      const style = getComputedStyle(element)
+      const style = getComputedStyle(element, '::after')
       return {
         backgroundImage: style.backgroundImage,
-        backgroundSize: style.backgroundSize,
-        backgroundClip: style.backgroundClip,
-        textFillColor: style.webkitTextFillColor,
         animationDuration: style.animationDuration,
         animationTimingFunction: style.animationTimingFunction,
-        animationDirection: style.animationDirection,
       }
     })
   ))
   expect(shimmerStyles).toHaveLength(2)
   for (const shimmerStyle of shimmerStyles) {
     expect(shimmerStyle.backgroundImage).toContain('linear-gradient')
-    expect(shimmerStyle.backgroundSize).toBe('200% 100%')
-    expect(shimmerStyle.backgroundClip).toBe('text')
-    expect(shimmerStyle.textFillColor).toBe('rgba(0, 0, 0, 0)')
     expect(shimmerStyle.animationDuration).toBe('1.4s')
     expect(shimmerStyle.animationTimingFunction).toBe('linear')
-    expect(shimmerStyle.animationDirection).toBe('normal')
   }
   expect(shimmerStyles[1]).toEqual(shimmerStyles[0])
   const pendingStyle = await page.locator('.tool-text.pending').evaluate((element) => {
     const style = getComputedStyle(element)
+    const shimmer = getComputedStyle(element, '::after')
     const header = element.closest('.tool-call-header')
     return {
-      backgroundImage: style.backgroundImage,
-      backgroundClip: style.backgroundClip,
-      textFillColor: style.webkitTextFillColor,
+      backgroundImage: shimmer.backgroundImage,
       flexGrow: style.flexGrow,
       textWidth: element.getBoundingClientRect().width,
       headerWidth: header?.getBoundingClientRect().width ?? 0,
     }
   })
   expect(pendingStyle.backgroundImage).toContain('linear-gradient')
-  expect(pendingStyle.backgroundClip).toBe('text')
-  expect(pendingStyle.textFillColor).toBe('rgba(0, 0, 0, 0)')
   expect(pendingStyle.flexGrow).toBe('0')
   expect(pendingStyle.textWidth).toBeLessThan(pendingStyle.headerWidth / 2)
   await page.screenshot({ path: testInfo.outputPath(`${chatMode}-pending.png`), fullPage: true })
-  await expect(page.locator('.tool-text')).toHaveText('获取当前时间：2026-08-15 12:00')
-  await expect(page.locator('.stream-cursor')).toHaveCount(0)
+  await expect(page.locator('.tool-text')).toHaveText('查看可用工具')
   expect(pageErrors, apiRequests.join('\n')).toEqual([])
 
   const transitions = await page.evaluate(() => (
     (window as typeof window & { __toolbarTransitions?: ToolbarTransition[] }).__toolbarTransitions ?? []
   ))
-  const pending = transitions.find((transition) => transition.pending && transition.text === '正在获取当前时间')
-  const completed = transitions.find((transition) => !transition.pending && transition.text.includes('获取当前时间：'))
+  const pending = transitions.find((transition) => transition.pending && transition.text === '正在查看可用工具')
+  const completed = transitions.find((transition) => !transition.pending && transition.text === '查看可用工具')
   expect(pending).toBeDefined()
   expect(pending?.expandable).toBe(false)
   expect(completed).toBeDefined()

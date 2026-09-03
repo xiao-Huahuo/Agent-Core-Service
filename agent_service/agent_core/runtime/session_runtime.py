@@ -240,6 +240,8 @@ class SessionRuntimeMixin:
         except (json.JSONDecodeError, TypeError):
             return []
         value = state.get(key) if isinstance(state, dict) else None
+        if value is None and isinstance(state, dict) and isinstance(state.get("plan"), dict):
+            value = state["plan"].get(key)
         return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
     def _persist_child_agent_snapshot(self, session_id: str, child: dict[str, Any]) -> None:
         """Keep the last child-agent state available after history reloads and imports."""

@@ -12,15 +12,13 @@ from typing import Any
 
 from agent_service.schemas.favorite import FavoriteCreate
 from agent_service.schemas.feedback import FeedbackCreate, FeedbackUpdate
-from agent_service.tools.runtime_context import AGENT_ACCESS_READONLY, get_tool_runtime
+from agent_service.tools.runtime_context import AGENT_ACCESS_READONLY, get_tool_runtime, get_tool_service
 
 
 def _service(name: str) -> Any:
-    """延迟读取 REST 依赖容器中的业务 service，避免 AgentCore 导入环。"""
+    """读取 Agent 工具运行时显式注入的业务 service。"""
 
-    from agent_service.api.rest import deps
-
-    return getattr(deps, f"_require_{name}_service")()
+    return get_tool_service(name)
 
 
 def _json(payload: Any) -> str:

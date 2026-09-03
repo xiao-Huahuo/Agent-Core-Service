@@ -14,6 +14,7 @@ from agent_service.tools.runtime_context import (
     get_markdown_html_visualization_callback,
     get_task_list_callback,
     get_tool_runtime,
+    get_tool_service,
     register_network_citation,
     register_tool_citation,
 )
@@ -26,14 +27,9 @@ from agent_service.tools.builtin.builtin import (
 )
 
 def _get_library_service() -> Any:
-    """返回启动阶段注入的图书馆虚拟编目服务,未就绪时抛出 RuntimeError。"""
+    """返回 Agent 工具运行时显式注入的图书馆服务。"""
 
-    from agent_service.api.rest.deps import _require_library_service
-
-    try:
-        return _require_library_service()
-    except Exception as exc:
-        raise RuntimeError(f"图书馆服务未就绪: {exc}")
+    return get_tool_service("library")
 def _format_library_item(item: dict[str, Any], index: int = 0) -> str:
     """将单个图书馆条目序列化为一行或多行可读文本,便于 Agent 提取 item_id。"""
 

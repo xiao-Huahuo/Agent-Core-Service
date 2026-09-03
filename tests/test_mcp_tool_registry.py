@@ -67,7 +67,7 @@ def test_tool_registry_registers_builtin_and_mcp_tools(monkeypatch: Any) -> None
 
     registry = ToolRegistry.with_builtin_tools(config=config)
 
-    assert registry.get("echo_text") is not None
+    assert registry.get("list_available_tools") is not None
     registered_tool = registry.get("mcp__demo_server__echo_remote")
     assert registered_tool is not None
     assert "demo_server" in registered_tool.description

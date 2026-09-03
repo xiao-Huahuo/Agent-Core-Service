@@ -20,6 +20,14 @@ if TYPE_CHECKING:
 
 TASK_LIST_STATE_KEY = "task_list"
 PLAN_STATE_KEY = "plan"
+MODERN_STATE_KEYS = {
+    PLAN_STATE_KEY,
+    TASK_LIST_STATE_KEY,
+    "child_agents",
+    "change_snapshot",
+    "compression_state",
+    "environment",
+}
 
 
 def utc_iso() -> str:
@@ -38,7 +46,7 @@ def normalize_session_state(raw: dict[str, Any] | None) -> dict[str, Any]:
 
     if not isinstance(raw, dict):
         return {}
-    if PLAN_STATE_KEY in raw or TASK_LIST_STATE_KEY in raw:
+    if MODERN_STATE_KEYS.intersection(raw):
         return copy.deepcopy(raw)
     return {PLAN_STATE_KEY: copy.deepcopy(raw)}
 

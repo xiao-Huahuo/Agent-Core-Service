@@ -122,4 +122,37 @@
 - 工作区既有未提交文件：`editor/e2e/wiki-links.spec.ts`，本任务不触碰。
 - 临时模型 key 仅在确有必要时通过进程环境注入，不落盘。
 
+## 最终发现
+- 正式原生注册表共 107 个工具，107 个均可转换为 LangChain StructuredTool。
+- 新增定向测试覆盖此前缺少直接成功路径的 74 个工具；既有扩展闭环覆盖 31 个；附件续读与识图覆盖余下 2 个。
+- MCP 动态层完成发现、注册、命名隔离、调用和结果转换测试。
+- 首个基线失败来自 MCP 测试残留 `echo_text` 断言，属于测试失真；已改为正式 `list_available_tools`。
+- 浏览器测试残留已移除的 `get_current_time`、不存在的 stream DOM class 和旧 shimmer CSS 断言；均已对齐当前实现。
+- 该条仅描述初始单元审计；真实 API 纠正轮已按授权使用模型，并在结束后清空隔离审计用户凭据。
+
+## 最终验证
+- 后端定向批次：13 + 8 + 5 + 3 + 2 + 2，全部通过。
+- Vite 生产构建通过。
+- Chromium 单 worker Tool/Chat 两种模式：2 passed；截图人工检查工具 pending 行可见且布局正常。
+
+---
+# Notes: Agent 全工具真实 API 验收（纠正轮）
+
+## 验收红线
+- 禁止 monkeypatch Service、HTTP route fulfil、直接调用 definition.function 作为通过证据。
+- 每个工具必须由真实 `/agent/stream` 模型循环调用并出现成功 `tool_call_end`。
+- 已通过工具写入账本后不再发送给模型复测。
+
+## 已知真实失败
+- 用户报告：经 API 调用图书馆工具得到 HTTP 503。
+- 高概率路径：工具线程调用 `api.rest.deps._require_library_service()`，但 request-scoped `ApplicationServices` ContextVar 未传播或未绑定。
+
+## 最终 API 结果
+- `registered=107 passed=107 failed=0 missing=0`。
+- 真实共享根因：SSE 图线程无法继承 REST ContextVar；改为 ToolRuntimeState 显式 Service 注入。
+- DSH 连续根因：内置 OpenTelemetry Core/Resources 半包、MAX_PATH 解压、修复失败状态被旧安装掩盖、失败句柄租约未释放、子 Agent 快照被 plan 归一化丢失。
+- 联网工具根因：无代理配置被硬拒绝；改为代理可选后真实网页与图片搜索均返回 Citation。
+- 最后单独执行本地识图，真实返回视觉描述；未与其他高内存测试并行。
+- 清理：审计 key 已清空，功能开关复原，120 个审计会话删除。
+
 ---

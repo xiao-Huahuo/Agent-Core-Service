@@ -153,6 +153,34 @@ def runtime_files(root: Path):
             yield path
 
 
+def hydrate_runtime_node_package(
+    *,
+    dsh_root: Path,
+    runtime_closure: Path,
+    package_name: str,
+    required_file: str,
+) -> None:
+    """用 pnpm 完整包补齐 Runtime 闭包中被追踪器裁残的同版本 Node 包。"""
+
+    pnpm_root = dsh_root / "node_modules" / ".pnpm"
+    source_packages: dict[str, Path] = {}
+    for package_json in pnpm_root.glob(f"*/node_modules/{package_name}/package.json"):
+        payload = json.loads(package_json.read_text(encoding="utf-8"))
+        source_packages[str(payload.get("version") or "")] = package_json.parent
+    targets = list(runtime_closure.glob(f"node_modules/**/node_modules/{package_name}/package.json"))
+    targets.extend(runtime_closure.glob(f"node_modules/{package_name}/package.json"))
+    for package_json in targets:
+        target = package_json.parent
+        if (target / required_file).is_file():
+            continue
+        version = str(json.loads(package_json.read_text(encoding="utf-8")).get("version") or "")
+        source = source_packages.get(version)
+        if source is None or not (source / required_file).is_file():
+            raise FileNotFoundError(f"Node Runtime 闭包缺少 {package_name}@{version}/{required_file}")
+        shutil.rmtree(target)
+        shutil.copytree(source, target)
+
+
 def build_dsh(dsh_root: Path) -> Path:
     """调用 DSH 构建链生成固定、自包含的 Node Runtime闭包。"""
 
@@ -204,6 +232,18 @@ def build_bundle(args: argparse.Namespace) -> tuple[Path, Path]:
     if not node_version.startswith(f"v{required_node_major}."):
         raise RuntimeError(f"受管 DSH Runtime要求 Node {required_node_major}，当前为 {node_version}")
     runtime_closure = build_dsh(dsh_root)
+    hydrate_runtime_node_package(
+        dsh_root=dsh_root,
+        runtime_closure=runtime_closure,
+        package_name="@opentelemetry/core",
+        required_file="build/src/baggage/propagation/W3CBaggagePropagator.js",
+    )
+    hydrate_runtime_node_package(
+        dsh_root=dsh_root,
+        runtime_closure=runtime_closure,
+        package_name="@opentelemetry/resources",
+        required_file="build/src/detectors/EnvDetector.js",
+    )
     if not (runtime_closure / "node_modules" / "@deepseek-ai" / "dsh" / "lib" / "bin.js").is_file():
         raise FileNotFoundError(f"DSH Node Runtime闭包不存在: {runtime_closure}")
 

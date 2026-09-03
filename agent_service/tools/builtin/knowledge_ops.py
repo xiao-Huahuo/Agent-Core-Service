@@ -19,23 +19,19 @@ from agent_service.services.knowledge_graph import (
     get_graph_extraction_progress,
 )
 from agent_service.tools.builtin.jobs import ToolJobCancelled, tool_job_manager
-from agent_service.tools.runtime_context import AGENT_ACCESS_READONLY, get_tool_runtime
+from agent_service.tools.runtime_context import AGENT_ACCESS_READONLY, get_tool_runtime, get_tool_service
 
 
 def _knowledge_service() -> Any:
-    """延迟读取应用注入的知识库服务，避免 AgentCore 导入环。"""
+    """读取 Agent 工具运行时显式注入的知识库服务。"""
 
-    from agent_service.api.rest.deps import _require_knowledge_library_service
-
-    return _require_knowledge_library_service()
+    return get_tool_service("knowledge_library")
 
 
 def _graph_service() -> Any:
-    """延迟读取应用注入的图谱服务。"""
+    """读取 Agent 工具运行时显式注入的图谱服务。"""
 
-    from agent_service.api.rest.deps import _require_knowledge_graph_service
-
-    return _require_knowledge_graph_service()
+    return get_tool_service("knowledge_graph")
 
 
 def _settings_service() -> Any:

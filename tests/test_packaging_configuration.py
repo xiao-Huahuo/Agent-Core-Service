@@ -72,7 +72,7 @@ def test_checked_in_dsh_sdk_bundle_matches_locked_release() -> None:
 
     archive, manifest = verify_bundle_files(PROJECT_ROOT / "resources" / "dsh" / "sdk")
 
-    assert archive.stat().st_size == 66_008_168
+    assert archive.stat().st_size == 66_075_375
     assert manifest.is_file()
 
 

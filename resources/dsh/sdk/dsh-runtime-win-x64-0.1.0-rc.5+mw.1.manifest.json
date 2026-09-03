@@ -7,9 +7,9 @@
   "platform": "windows",
   "arch": "x64",
   "archive_file": "dsh-runtime-win-x64-0.1.0-rc.5+mw.1.zip",
-  "archive_sha256": "3e21f6c8a6a1f78d77e2d633d8f686d53bb15bfb9c9c415e94bcec4aff79fefe",
-  "archive_size_bytes": 66008168,
-  "installed_size_bytes": 192256620,
+  "archive_sha256": "c44721f65ee93be6fd90536572e769edd7a74143760ab5f813c950670fd2cf1b",
+  "archive_size_bytes": 66075375,
+  "installed_size_bytes": 192340257,
   "executable": "node/node.exe",
   "launcher": "dsh-job-launcher.exe",
   "cordis_configs": {

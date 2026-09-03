@@ -117,3 +117,44 @@ def test_prepared_dsh_source_checks_out_lock_and_applies_patch(
         assert (checkout / "demo.txt").read_text(encoding="utf-8") == "patched\n"
     assert not temporary_clone.exists()
     assert (source / "demo.txt").read_text(encoding="utf-8") == "base\n"
+
+
+def test_hydrate_runtime_node_package_repairs_truncated_same_version_package(tmp_path: Path) -> None:
+    """构建闭包缺文件时应从 pnpm store 复制同版本完整包，禁止发布半包。"""
+
+    required = Path("build/src/baggage/propagation/W3CBaggagePropagator.js")
+    source = tmp_path / "source" / "node_modules" / ".pnpm" / "@opentelemetry+core@2.10.0" / "node_modules" / "@opentelemetry" / "core"
+    target = tmp_path / "runtime" / "node_modules" / "plugin" / "node_modules" / "@opentelemetry" / "core"
+    for package in (source, target):
+        package.mkdir(parents=True)
+        (package / "package.json").write_text(
+            json.dumps({"name": "@opentelemetry/core", "version": "2.10.0"}),
+            encoding="utf-8",
+        )
+    (source / required).parent.mkdir(parents=True)
+    (source / required).write_text("module.exports = {};", encoding="utf-8")
+
+    bundle.hydrate_runtime_node_package(
+        dsh_root=tmp_path / "source",
+        runtime_closure=tmp_path / "runtime",
+        package_name="@opentelemetry/core",
+        required_file=required.as_posix(),
+    )
+
+    assert (target / required).is_file()
+
+
+def test_checked_in_dsh_bundle_contains_complete_telemetry_runtime() -> None:
+    """仓库内置 ZIP 必须通过 manifest 校验并包含两个曾缺失的运行时模块。"""
+
+    archive, _manifest = bundle.verify_bundle_files(bundle.PROJECT_ROOT / "resources" / "dsh" / "sdk")
+    required = {
+        "runtime/node/node_modules/@deepseek-ai/dsh-session-telemetry-otel/node_modules/"
+        "@opentelemetry/core/build/src/baggage/propagation/W3CBaggagePropagator.js",
+        "runtime/node/node_modules/@deepseek-ai/dsh-session-telemetry-otel/node_modules/"
+        "@opentelemetry/resources/build/src/detectors/EnvDetector.js",
+    }
+    with bundle.zipfile.ZipFile(archive) as package:
+        names = set(package.namelist())
+
+    assert required <= names

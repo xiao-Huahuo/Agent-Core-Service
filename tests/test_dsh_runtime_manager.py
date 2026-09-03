@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
+from pathlib import Path
 import zipfile
 
 import pytest
@@ -121,3 +123,38 @@ def test_runtime_manager_refuses_install_without_embedded_bundle(tmp_path) -> No
     manager = _manager(tmp_path, tmp_path / "missing-bundle")
     with pytest.raises(ValueError, match="内置 SDK"):
         manager.start_install()
+
+
+def test_runtime_manager_preserves_repair_failure_when_old_runtime_still_exists(tmp_path) -> None:
+    """修复失败后不得因旧 executable 尚在就把 failed 状态伪装回 ready。"""
+
+    manager = _manager(tmp_path)
+    version_dir = manager.versions_dir / "test-v1"
+    version_dir.mkdir(parents=True)
+    (version_dir / "runtime.exe").write_bytes(b"old-runtime")
+    manager.current_file.write_text(
+        json.dumps({"version": "test-v1", "executable": "runtime.exe"}),
+        encoding="utf-8",
+    )
+    manager._set_progress("failed", "repair self-check failed")
+
+    status = manager.get_management_status()
+
+    assert status["status"] == "failed"
+    assert status["message"] == "repair self-check failed"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows MAX_PATH regression")
+def test_runtime_manager_extracts_required_node_file_beyond_max_path(tmp_path) -> None:
+    """受管 ZIP 的深层 Node 依赖必须通过扩展路径完整解压。"""
+
+    manager = _manager(tmp_path)
+    archive = tmp_path / "long-path.zip"
+    relative = Path(*(["nested-segment"] * 18), "runtime.js")
+    with zipfile.ZipFile(archive, "w") as package:
+        package.writestr(relative.as_posix(), b"module.exports = true;")
+    destination = tmp_path / "extracted"
+
+    manager._extract_archive(archive, destination, total_bytes=0)
+
+    assert manager._windows_io_path(destination / relative).read_bytes() == b"module.exports = true;"

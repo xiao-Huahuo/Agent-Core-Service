@@ -164,6 +164,7 @@ class AgentCore(ChildAgentRuntimeMixin, GraphRunnerMixin, SessionRuntimeMixin, M
         self.settings_service = settings_service
         self.unified_search_service: Any = None
         self.activity_service: Any = None
+        self.tool_services: dict[str, Any] = {}
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config, settings_service=settings_service)
         self.child_agent_manager = ChildAgentManager(
             config=config,

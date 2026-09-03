@@ -14,6 +14,7 @@ from agent_service.tools.runtime_context import (
     get_markdown_html_visualization_callback,
     get_task_list_callback,
     get_tool_runtime,
+    get_tool_service,
     register_network_citation,
     register_tool_citation,
 )
@@ -28,11 +29,7 @@ from agent_service.tools.builtin.builtin import (
 def _get_git_service():
     """返回应用启动阶段注入的统一 GitService。"""
 
-    from agent_service.api.rest.deps import _git_service
-
-    if _git_service is None:
-        raise RuntimeError("GitService 尚未初始化。")
-    return _git_service
+    return get_tool_service("git")
 def _require_git_write_access() -> Any:
     """校验当前 Agent 不是只读模式并返回运行时上下文。"""
 

@@ -105,14 +105,50 @@ class ChildAgentRuntimeMixin:
 
         records = self.child_agent_manager.list_children_for_session(session_id)
         active_children = [self._child_record_to_dict(record) for record in records]
+        event_children = self._load_child_agents_from_messages(session_id)
         saved_children = self._load_session_state_list(session_id, "child_agents")
         # Live records win so the panel never renders a stale terminal status while a child is running.
         children_by_run_id = {
             str(child.get("run_id") or ""): self._with_child_conversation_session(session_id, child)
-            for child in saved_children
+            for child in [*event_children, *saved_children]
         }
         children_by_run_id.update({child["run_id"]: child for child in active_children})
         return list(children_by_run_id.values())
+
+    def _load_child_agents_from_messages(self, session_id: str) -> list[dict[str, Any]]:
+        """从持久化工具结果和生命周期消息恢复被旧状态归一化丢失的子 Agent。"""
+
+        if self.session_service is None:
+            return []
+        session = self.session_service.get_session(session_id)
+        message_service = self._get_message_service()
+        if session is None or message_service is None:
+            return []
+        children: dict[str, dict[str, Any]] = {}
+        messages = message_service.list_session_messages(
+            user_id=session.user_id,
+            session_id=session_id,
+            limit=None,
+            exclude_roles=None,
+        )
+        for message in messages:
+            candidate: dict[str, Any] | None = None
+            if message.role == "tool":
+                try:
+                    parsed = json.loads(message.content)
+                    candidate = parsed if isinstance(parsed, dict) and parsed.get("run_id") else None
+                except (json.JSONDecodeError, TypeError):
+                    candidate = None
+            metadata = message.metadata_json or {}
+            event = metadata.get("child_agent_event") if isinstance(metadata, dict) else None
+            child = event.get("child") if isinstance(event, dict) else None
+            if isinstance(child, dict) and child.get("run_id"):
+                candidate = {**(candidate or children.get(str(child["run_id"]), {})), **child}
+            if candidate is None:
+                continue
+            run_id = str(candidate.get("run_id") or "")
+            children[run_id] = {**children.get(run_id, {}), **candidate}
+        return list(children.values())
     def stop_child_agent(self, run_id: str) -> bool:
         """向指定子 Agent 发送停止信号。"""
 
@@ -302,6 +338,7 @@ class ChildAgentRuntimeMixin:
                         "category": record.contract.category,
                         "name": record.contract.name,
                         "provider": record.contract.provider,
+                        "workspace_root": record.contract.workspace_root,
                         "mode": record.contract.mode,
                         "status": status_value,
                         "access_mode": record.effective_access_mode,

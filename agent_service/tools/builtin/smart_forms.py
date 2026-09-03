@@ -23,25 +23,21 @@ from agent_service.schemas.structured_generation import (
     StructuredGenerationRequest,
     StructuredGenerationSource,
 )
-from agent_service.tools.runtime_context import AGENT_ACCESS_READONLY, get_tool_runtime
+from agent_service.tools.runtime_context import AGENT_ACCESS_READONLY, get_tool_runtime, get_tool_service
 
 DEFAULT_ROW_HEIGHT = DEFAULT_BUSINESS_LIMITS.smart_form_default_row_height
 
 
 def _smart_form_service() -> Any:
-    """延迟读取智能表格服务，避免 AgentCore 导入环。"""
+    """读取 Agent 工具运行时显式注入的智能表格服务。"""
 
-    from agent_service.api.rest.deps import _require_smart_form_service
-
-    return _require_smart_form_service()
+    return get_tool_service("smart_form")
 
 
 def _generation_service() -> Any:
-    """延迟读取结构化字段生成服务。"""
+    """读取 Agent 工具运行时显式注入的结构化生成服务。"""
 
-    from agent_service.api.rest.deps import _require_structured_generation_service
-
-    return _require_structured_generation_service()
+    return get_tool_service("structured_generation")
 
 
 def _json(payload: Any) -> str:

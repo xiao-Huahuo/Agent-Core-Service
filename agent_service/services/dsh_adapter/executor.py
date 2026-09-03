@@ -104,6 +104,7 @@ class DshChildAgentExecutor:
             context.raise_if_stopped()
             return result.final_response
         except Exception as exc:
+            self.stop(context.run_id)
             if context.cancellation.is_set():
                 raise ChildAgentStopped("DSH 子 Agent已停止") from exc
             raise
