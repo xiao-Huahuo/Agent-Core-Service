@@ -179,7 +179,9 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         config=config,
         knowledge_library_service=knowledge_library_service,
     )
-    knowledge_graph_queue_service = KnowledgeGraphQueueService()
+    knowledge_graph_queue_service = KnowledgeGraphQueueService(
+        max_concurrency=config.limits.knowledge_graph_queue_worker_count,
+    )
     component_library_service = ComponentLibraryService(
         settings_service=settings_service,
         legacy_engine=settings_service.engine,

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -86,6 +87,50 @@ def test_submit_reuses_same_active_file_and_appends_new_file(tmp_path: Path) -> 
     assert [job["path"] for job in active] == ["first.md", "second.md"]
 
 
+def test_scheduler_runs_two_files_concurrently_and_allows_out_of_order_completion(tmp_path: Path) -> None:
+    """两个 worker 必须并发领取不同文件，并允许后启动的任务先完成。"""
+
+    service, _library = _service(tmp_path)
+    service.limits = SimpleNamespace(
+        knowledge_job_worker_count=2,
+        knowledge_job_poll_seconds=0.01,
+        knowledge_job_scheduler_join_timeout_seconds=1.0,
+        knowledge_job_process_join_timeout_seconds=1.0,
+    )
+    for name in ("first.md", "second.md"):
+        (tmp_path / "knowledge" / name).write_text(f"# {name}", encoding="utf-8")
+    service.submit(user_id="u1", paths=["first.md", "second.md"])
+
+    both_started = threading.Barrier(3)
+    releases = {name: threading.Event() for name in ("first.md", "second.md")}
+    finished: list[str] = []
+    all_finished = threading.Event()
+
+    def run_claimed_job(job: dict[str, object]) -> None:
+        path = str(job["path"])
+        both_started.wait(timeout=2)
+        assert releases[path].wait(timeout=2)
+        finished.append(path)
+        if len(finished) == 2:
+            all_finished.set()
+
+    service._run_claimed_job = run_claimed_job  # type: ignore[method-assign]
+    try:
+        service.start()
+        both_started.wait(timeout=2)
+        releases["second.md"].set()
+        while not finished:
+            assert not all_finished.wait(timeout=0.01)
+        releases["first.md"].set()
+        assert all_finished.wait(timeout=2)
+    finally:
+        for release in releases.values():
+            release.set()
+        service.stop()
+
+    assert finished == ["second.md", "first.md"]
+
+
 def test_progress_event_persists_detailed_stage_units(tmp_path: Path) -> None:
     """页、图片或切片等阶段单位必须直接进入任务记录。"""
 
@@ -152,8 +197,7 @@ def test_cancel_running_job_terminates_worker_and_restores_unindexed_state(tmp_p
     submitted = service.submit(user_id="u1", paths=["large.pdf"])[0]
     claimed = service._claim_next()
     process = FakeProcess()
-    service._current_job_id = submitted["job_id"]
-    service._current_process = process  # type: ignore[assignment]
+    service._processes[submitted["job_id"]] = process  # type: ignore[assignment]
 
     cancelled = service.cancel(job_id=submitted["job_id"], user_id="u1")
 

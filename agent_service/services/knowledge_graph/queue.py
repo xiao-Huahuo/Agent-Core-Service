@@ -1,7 +1,7 @@
 """知识图谱逐文件异步队列。
 
 使用说明:
-REST 层把已经完成灌库的文件追加到 ``submit``；每个知识库只启动一个
+REST 层把已经完成灌库的文件追加到 ``submit``；每个知识库启动固定数量的
 worker，运行中的同一路径自动去重，进度在入队、处理和出队时统一聚合。
 应用关闭时必须调用 ``stop`` 等待 worker 退出。
 """
@@ -39,10 +39,10 @@ class _GraphQueueState:
     """保存单个用户知识库的等待、在途和聚合进度。"""
 
     pending: deque[_GraphQueueTask] = field(default_factory=deque)
-    active: _GraphQueueTask | None = None
+    active: dict[str, _GraphQueueTask] = field(default_factory=dict)
     in_flight: set[str] = field(default_factory=set)
     docs: dict[str, dict[str, Any]] = field(default_factory=dict)
-    thread: threading.Thread | None = None
+    threads: set[threading.Thread] = field(default_factory=set)
     message: str = ""
     result_json: str = ""
 
@@ -55,11 +55,13 @@ class KnowledgeGraphQueueService:
         *,
         runner: GraphRunner = _run_graph_extraction,
         progress_writer: ProgressWriter = _update_graph_progress,
+        max_concurrency: int = 2,
     ) -> None:
-        """保存可替换执行器并初始化线程安全状态。"""
+        """保存执行器、单知识库并发上限，并初始化线程安全状态。"""
 
         self._runner = runner
         self._progress_writer = progress_writer
+        self._max_concurrency = max(1, int(max_concurrency))
         self._states: dict[tuple[str, str], _GraphQueueState] = {}
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
@@ -84,10 +86,12 @@ class KnowledgeGraphQueueService:
         key = (user_id, library_id)
         identity = target_display_path or "__all__"
         with self._lock:
+            if self._stop_event.is_set():
+                raise RuntimeError("图谱队列正在关闭")
             state = self._states.setdefault(key, _GraphQueueState())
             if identity in state.in_flight:
                 return {"status": "deduplicated", "message": "该图谱任务已在队列中"}
-            if state.active is None and not state.pending and not (state.thread and state.thread.is_alive()):
+            if not state.active and not state.pending and not state.threads:
                 state.docs.clear()
                 state.message = ""
                 state.result_json = ""
@@ -112,14 +116,19 @@ class KnowledgeGraphQueueService:
             state.docs[identity] = self._pending_doc(task)
             state.message = f"已加入图谱队列：{task.display_name}"
             self._publish_locked(key, state, status="running")
-            if state.thread is None or not state.thread.is_alive():
-                state.thread = threading.Thread(
+            while state.pending and len(state.threads) < self._max_concurrency:
+                thread = threading.Thread(
                     target=self._worker,
                     args=(key,),
                     daemon=True,
-                    name=f"knowledge-graph-queue-{library_id}",
+                    name=f"knowledge-graph-queue-{library_id}-{len(state.threads)}",
                 )
-                state.thread.start()
+                state.threads.add(thread)
+                try:
+                    thread.start()
+                except Exception:
+                    state.threads.discard(thread)
+                    raise
         return {"status": "queued", "message": "图谱任务已加入队列"}
 
     def stop(self) -> None:
@@ -127,23 +136,24 @@ class KnowledgeGraphQueueService:
 
         self._stop_event.set()
         with self._lock:
-            threads = [state.thread for state in self._states.values() if state.thread]
+            threads = [thread for state in self._states.values() for thread in state.threads]
         for thread in threads:
             thread.join(timeout=5)
 
     def _worker(self, key: tuple[str, str]) -> None:
         """持续领取同一知识库的新任务，直到等待队列真正为空。"""
 
-        while not self._stop_event.is_set():
+        current_thread = threading.current_thread()
+        while True:
             with self._lock:
                 state = self._states[key]
-                if not state.pending:
-                    state.active = None
-                    state.thread = None
-                    self._publish_locked(key, state, status=self._final_status(state))
+                if self._stop_event.is_set() or not state.pending:
+                    state.threads.discard(current_thread)
+                    status = "running" if state.active or state.pending else self._final_status(state)
+                    self._publish_locked(key, state, status=status)
                     return
                 task = state.pending.popleft()
-                state.active = task
+                state.active[task.identity] = task
                 state.docs[task.identity] = {
                     **state.docs[task.identity],
                     "status": "processing",
@@ -167,11 +177,11 @@ class KnowledgeGraphQueueService:
                 state = self._states[key]
                 self._finish_task_docs(state, task)
                 state.in_flight.discard(task.identity)
-                state.active = None
+                state.active.pop(task.identity, None)
                 self._publish_locked(
                     key,
                     state,
-                    status="running" if state.pending else self._final_status(state),
+                    status="running" if state.pending or state.active else self._final_status(state),
                 )
 
     def _merge_progress(self, *, key: tuple[str, str], task: _GraphQueueTask, payload: dict[str, Any]) -> None:

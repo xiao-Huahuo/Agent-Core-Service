@@ -682,7 +682,7 @@ class AgentConfig:
         redis_block_timeout_ms: int = 1000
         redis_result_poll_interval_seconds: float = 0.2
         large_model_max_concurrency: int = 4
-        small_model_max_concurrency: int = 2
+        small_model_max_concurrency: int = 3
         operation_timeout_worker_count: int = 1
         worker_shutdown_timeout_seconds: float = 1.0
         local_queue_poll_seconds: float = 0.2
@@ -999,9 +999,11 @@ class AgentConfig:
         git_network_timeout_seconds: Git 推送、拉取等网络命令超时秒数。
         knowledge_job_process_join_timeout_seconds: 入库子进程停止时等待退出的秒数。
         knowledge_job_scheduler_join_timeout_seconds: 入库调度线程关闭时等待退出的秒数。
+        knowledge_job_worker_count: 入库队列允许同时执行的文件任务数。
         knowledge_job_poll_seconds: 入库任务队列空闲轮询间隔秒数。
         knowledge_job_process_poll_seconds: 入库子进程状态检查间隔秒数。
         knowledge_job_event_wait_seconds: 入库子进程最终事件等待秒数。
+        knowledge_graph_queue_worker_count: 单个用户知识库允许同时执行的图谱任务数。
         web_search_retry_count: Web 搜索失败时的总尝试次数。
         web_search_timeout_seconds: Web 搜索请求超时秒数。
         web_search_retry_delay_seconds: Web 搜索重试间隔秒数。
@@ -1197,9 +1199,11 @@ class AgentConfig:
         git_network_timeout_seconds: int = 120
         knowledge_job_process_join_timeout_seconds: float = 2.0
         knowledge_job_scheduler_join_timeout_seconds: float = 3.0
+        knowledge_job_worker_count: int = 2
         knowledge_job_poll_seconds: float = 1.0
         knowledge_job_process_poll_seconds: float = 0.05
         knowledge_job_event_wait_seconds: float = 0.2
+        knowledge_graph_queue_worker_count: int = 2
         web_search_retry_count: int = 3
         web_search_timeout_seconds: int = 20
         web_search_retry_delay_seconds: float = 1.0

@@ -13,11 +13,14 @@ from typing import Any
 from agent_service.services.knowledge_graph.queue import KnowledgeGraphQueueService
 
 
-def test_graph_queue_appends_during_run_and_deduplicates_inflight_path(tmp_path: Path) -> None:
-    """第二次点击应追加新文件，并复用仍在途的同一路径。"""
+def test_graph_queue_runs_two_tasks_concurrently_and_deduplicates_inflight_path(tmp_path: Path) -> None:
+    """同库两个任务应并发且可乱序完成，同时复用仍在途的同一路径。"""
 
     first_started = threading.Event()
-    release_first = threading.Event()
+    both_started = threading.Barrier(3)
+    releases = {name: threading.Event() for name in ("first.md", "second.md")}
+    finished: list[str] = []
+    all_finished = threading.Event()
     calls: list[str] = []
     snapshots: list[dict[str, Any]] = []
 
@@ -32,7 +35,11 @@ def test_graph_queue_appends_during_run_and_deduplicates_inflight_path(tmp_path:
         }])
         if path == "first.md":
             first_started.set()
-            assert release_first.wait(timeout=2)
+        both_started.wait(timeout=2)
+        assert releases[path].wait(timeout=2)
+        finished.append(path)
+        if len(finished) == 2:
+            all_finished.set()
         progress_callback(status="completed", total=1, current=1, message=path, docs=[{
             "path": path, "name": path, "status": "done", "progress": 100,
         }])
@@ -52,15 +59,20 @@ def test_graph_queue_appends_during_run_and_deduplicates_inflight_path(tmp_path:
     appended = service.submit(
         **common, target_source_path=tmp_path / "second.md", target_display_path="second.md",
     )
-    release_first.set()
-    thread = service._states[("u1", "lib1")].thread
-    assert thread is not None
-    thread.join(timeout=2)
+    both_started.wait(timeout=2)
+    releases["second.md"].set()
+    while not finished:
+        assert not all_finished.wait(timeout=0.01)
+    releases["first.md"].set()
+    assert all_finished.wait(timeout=2)
+    for thread in list(service._states[("u1", "lib1")].threads):
+        thread.join(timeout=2)
 
     assert first["status"] == "queued"
     assert duplicate["status"] == "deduplicated"
     assert appended["status"] == "queued"
-    assert calls == ["first.md", "second.md"]
+    assert set(calls) == {"first.md", "second.md"}
+    assert finished == ["second.md", "first.md"]
     assert any(snapshot["total"] == 2 and snapshot["current"] == 0 for snapshot in snapshots)
     assert snapshots[-1]["status"] == "completed"
     assert snapshots[-1]["current"] == snapshots[-1]["total"] == 2

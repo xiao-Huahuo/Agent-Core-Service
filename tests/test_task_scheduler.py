@@ -65,6 +65,12 @@ def teardown_function() -> None:
     reset_llm_task_schedulers()
 
 
+def test_default_small_model_pool_allows_three_concurrent_calls() -> None:
+    """默认小模型池必须提供三个并发许可。"""
+
+    assert AgentConfig.TaskScheduleConfig().small_model_max_concurrency == 3
+
+
 def test_llm_task_scheduler_retries_retryable_error() -> None:
     """验证调度器会对 overload/429 类错误进行重试。"""
 

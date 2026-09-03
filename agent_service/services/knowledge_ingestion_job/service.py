@@ -99,7 +99,7 @@ class KnowledgeIngestionJobService:
         knowledge_library_service: Any,
         autostart: bool = True,
     ) -> None:
-        """保存依赖、创建任务表，并按需启动单 worker 调度线程。"""
+        """保存依赖、创建任务表，并按配置启动固定数量的调度线程。"""
 
         self.engine = engine
         self.config = config
@@ -107,23 +107,32 @@ class KnowledgeIngestionJobService:
         self.knowledge_library_service = knowledge_library_service
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
-        self._thread: threading.Thread | None = None
+        self._threads: list[threading.Thread] = []
         self._submit_lock = threading.Lock()
+        self._claim_lock = threading.Lock()
         self._process_lock = threading.Lock()
-        self._current_job_id = ""
-        self._current_process: multiprocessing.Process | None = None
+        self._processes: dict[str, multiprocessing.Process] = {}
         self._reconcile_interrupted_jobs()
         if autostart:
             self.start()
 
     def start(self) -> None:
-        """启动后台调度线程；重复调用不会创建第二个 worker。"""
+        """启动固定数量的后台调度线程；重复调用不会创建额外 worker。"""
 
-        if self._thread and self._thread.is_alive():
+        if any(thread.is_alive() for thread in self._threads):
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._scheduler_loop, daemon=True, name="knowledge-ingestion-jobs")
-        self._thread.start()
+        worker_count = max(1, int(self.limits.knowledge_job_worker_count))
+        self._threads = [
+            threading.Thread(
+                target=self._scheduler_loop,
+                daemon=True,
+                name=f"knowledge-ingestion-jobs-{index}",
+            )
+            for index in range(worker_count)
+        ]
+        for thread in self._threads:
+            thread.start()
 
     def stop(self) -> None:
         """停止调度器并终止仍在运行的文件任务。"""
@@ -131,16 +140,15 @@ class KnowledgeIngestionJobService:
         self._stop_event.set()
         self._wake_event.set()
         with self._process_lock:
-            process = self._current_process
-            job_id = self._current_job_id
+            running_processes = list(self._processes.items())
+        for job_id, process in running_processes:
             if process and process.is_alive():
                 process.terminate()
                 process.join(timeout=self.limits.knowledge_job_process_join_timeout_seconds)
-        if job_id:
             self._finish_cancelled(job_id=job_id, message="应用关闭，入库任务已中止")
-        if self._thread:
-            self._thread.join(timeout=self.limits.knowledge_job_scheduler_join_timeout_seconds)
-            self._thread = None
+        for thread in self._threads:
+            thread.join(timeout=self.limits.knowledge_job_scheduler_join_timeout_seconds)
+        self._threads = []
 
     def submit(self, *, user_id: str, paths: list[str]) -> list[dict[str, Any]]:
         """校验文件并将每个路径持久化为独立等待任务。"""
@@ -257,10 +265,10 @@ class KnowledgeIngestionJobService:
             queued_cancel = record.status == "cancelled"
         if not queued_cancel:
             with self._process_lock:
-                process = self._current_process if self._current_job_id == job_id else None
-                if process and process.is_alive():
-                    process.terminate()
-                    process.join(timeout=self.limits.knowledge_job_process_join_timeout_seconds)
+                process = self._processes.get(job_id)
+            if process and process.is_alive():
+                process.terminate()
+                process.join(timeout=self.limits.knowledge_job_process_join_timeout_seconds)
             self._finish_cancelled(job_id=job_id, message="用户中止灌库")
         else:
             self._cleanup_source(user_id=user_id, path=record.path)
@@ -269,7 +277,7 @@ class KnowledgeIngestionJobService:
         return result
 
     def _scheduler_loop(self) -> None:
-        """串行领取任务，确保同一知识库不会并发改写索引。"""
+        """逐个领取任务；多个固定 worker 共同形成有界并发。"""
 
         while not self._stop_event.is_set():
             job = self._claim_next()
@@ -282,7 +290,7 @@ class KnowledgeIngestionJobService:
     def _claim_next(self) -> dict[str, Any] | None:
         """领取最早的等待任务并持久化 running 状态。"""
 
-        with Session(self.engine) as db:
+        with self._claim_lock, Session(self.engine) as db:
             record = db.exec(
                 select(KnowledgeIngestionJobRecord)
                 .where(KnowledgeIngestionJobRecord.status == "queued")
@@ -311,39 +319,47 @@ class KnowledgeIngestionJobService:
             args=(job["user_id"], job["path"], event_queue),
             daemon=True,
         )
+        job_id = str(job["job_id"])
         with self._process_lock:
-            self._current_job_id = str(job["job_id"])
-            self._current_process = process
-        process.start()
+            self._processes[job_id] = process
+        try:
+            process.start()
+        except Exception as exc:
+            with self._process_lock:
+                self._processes.pop(job_id, None)
+            event_queue.close()
+            self._finish_failed(job_id=job_id, message=f"入库工作进程启动失败: {exc}")
+            return
+        if self._stop_event.is_set() or self._is_cancel_requested(job_id):
+            process.terminate()
         final_event: dict[str, Any] | None = None
         while process.is_alive() and not self._stop_event.is_set():
-            final_event = self._drain_worker_events(job_id=str(job["job_id"]), event_queue=event_queue, final=final_event)
-            if self._is_cancel_requested(str(job["job_id"])):
+            final_event = self._drain_worker_events(job_id=job_id, event_queue=event_queue, final=final_event)
+            if self._is_cancel_requested(job_id):
                 process.terminate()
                 break
             time.sleep(self.limits.knowledge_job_process_poll_seconds)
         process.join(timeout=self.limits.knowledge_job_process_join_timeout_seconds)
-        final_event = self._drain_worker_events(job_id=str(job["job_id"]), event_queue=event_queue, final=final_event)
-        if final_event is None and not self._is_cancel_requested(str(job["job_id"])):
+        final_event = self._drain_worker_events(job_id=job_id, event_queue=event_queue, final=final_event)
+        if final_event is None and not self._is_cancel_requested(job_id):
             try:
                 event = event_queue.get(timeout=self.limits.knowledge_job_event_wait_seconds)
             except queue.Empty:
                 event = None
             if event is not None:
                 if event.get("type") == "progress":
-                    self.apply_progress(str(job["job_id"]), dict(event.get("payload") or {}))
+                    self.apply_progress(job_id, dict(event.get("payload") or {}))
                 else:
                     final_event = event
         with self._process_lock:
-            self._current_job_id = ""
-            self._current_process = None
-        if self._is_cancel_requested(str(job["job_id"])) or self._stop_event.is_set():
-            self._finish_cancelled(job_id=str(job["job_id"]), message="用户中止灌库")
+            self._processes.pop(job_id, None)
+        if self._is_cancel_requested(job_id) or self._stop_event.is_set():
+            self._finish_cancelled(job_id=job_id, message="用户中止灌库")
         elif final_event and final_event.get("type") == "done":
-            self._finish_success(job_id=str(job["job_id"]), result=dict(final_event.get("result") or {}))
+            self._finish_success(job_id=job_id, result=dict(final_event.get("result") or {}))
         else:
             message = str((final_event or {}).get("message") or f"入库工作进程异常退出 ({process.exitcode})")
-            self._finish_failed(job_id=str(job["job_id"]), message=message)
+            self._finish_failed(job_id=job_id, message=message)
         event_queue.close()
 
     def _drain_worker_events(self, *, job_id: str, event_queue: Any, final: dict[str, Any] | None) -> dict[str, Any] | None:
