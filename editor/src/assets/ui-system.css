@@ -193,6 +193,8 @@
 }
 
 :root[data-theme="dark"] {
+  --color-message-bubble-bg: #2f3035;
+  --color-message-bubble-text: #f4f4f6;
   --color-chrome-bg-top: rgba(18, 18, 20, 0.96);
   --color-chrome-bg-bottom: rgba(18, 18, 20, 0.94);
   --color-chrome-bg-solid: rgba(18, 18, 20, 0.90);
@@ -249,6 +251,8 @@
 }
 
 :root[data-theme="light"] {
+  --color-message-bubble-bg: #f4f4f4;
+  --color-message-bubble-text: #171721;
   --color-chrome-bg-top: #ffffff;
   --color-chrome-bg-bottom: #ffffff;
   --color-chrome-bg-solid: #ffffff;

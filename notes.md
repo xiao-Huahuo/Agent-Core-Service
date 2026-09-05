@@ -178,3 +178,34 @@
 - 清理：8003、5174、50052 端口已关闭，隔离验收数据已删除，仅保留截图证据。
 
 ---
+
+# Notes: Agent 消息时间分隔
+
+## 用户可见目标
+- 移除每个用户气泡左下角的时间。
+- 以 30 分钟为阈值，仅在时间段起点的消息上方显示一次完整年月日时分。
+- 分隔必须在历史重载和会话导入导出后按原始消息时间恢复。
+
+## 待核对链路
+- MessageList 如何筛选和排序实际可见消息，以及 MessageBubble 的相邻上下文如何传递。
+- `AgentChatMessage.created_at` 的创建、后端持久化和历史恢复格式。
+- 会话导出/导入是否保留每条消息的 `created_at`，是否存在转换时丢字段。
+
+## 已确认链路
+- `MessageRecord.created_at` 是正式数据库字段；历史 API 以 ISO 字符串返回。
+- `restoreAgentHistoryMessages` 将历史记录的 `created_at` 原样恢复到 `AgentChatMessage`。
+- `sessionExport.formatMessages` 明确导出每条消息的 `created_at`。
+- `/sessions/import` 与 `/sessions/import-file` 解析原始 `created_at` 并写回 `MessageRecord`；缺失时间才使用导入时刻兜底。
+- `MessageList` 是 chat/tool 两种模式共用的可见消息序列，适合唯一负责相邻时间段计算。
+
+## 失败基线
+- 新增 chat/tool 参数化用例均得到 0 个 `.message-time-separator`，与期望的首条及 30 分钟边界两处分隔不符。
+
+## 最终验证
+- `MessageList` 以单次 O(n) 计算生成时间标签，chat/tool 共用；无效时间跳过且不改变上一条有效时间锚点。
+- Vitest：边界定向 2/2；ChatBubble 整文件 23/23。
+- 持久化契约：导出 5/5，正式导入写入路径 1/1。
+- 定向 ESLint 与 Vite 生产构建通过。
+- Chromium 亮色实际页面首次加载及 reload 后均只显示首条与 30 分钟边界两处完整日期；截图已人工确认居中、低对比度且不遮挡气泡。
+
+---

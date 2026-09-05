@@ -47,6 +47,7 @@ let layoutScrollRafId = 0
 let layoutScrollTimeoutId = 0
 let followsSubmittedPrompt = false
 let userScrollRevision = 0
+const MESSAGE_TIME_SEPARATOR_MS = 30 * 60 * 1000
 
 function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
   return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
@@ -71,6 +72,29 @@ function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
 const visibleMessages = computed(() => {
   const base = props.messages.filter((message) => message.role !== 'system')
   return mergeConsecutiveSameNode(base)
+})
+
+/** Formats one persisted message time in the viewer's local timezone. */
+function formatMessageTime(timestamp: number) {
+  const date = new Date(timestamp)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}年${pad(date.getMonth() + 1)}月${pad(date.getDate())}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** Derives sparse timeline labels without duplicating persisted message data. */
+const visibleMessageEntries = computed(() => {
+  let previousTimestamp: number | null = null
+  return visibleMessages.value.map((message) => {
+    const timestamp = Date.parse(message.created_at ?? '')
+    const validTimestamp = Number.isFinite(timestamp) ? timestamp : null
+    const showTime = validTimestamp !== null
+      && (previousTimestamp === null || validTimestamp - previousTimestamp >= MESSAGE_TIME_SEPARATOR_MS)
+    if (validTimestamp !== null) previousTimestamp = validTimestamp
+    return {
+      message,
+      timeLabel: showTime && validTimestamp !== null ? formatMessageTime(validTimestamp) : '',
+    }
+  })
 })
 
 const showThinkingBubble = computed(() => {
@@ -395,7 +419,8 @@ defineExpose({
     @wheel="handleUserScrollIntent"
     @touchmove="handleUserScrollIntent"
   >
-    <template v-for="(message, index) in visibleMessages" :key="message.message_id ?? `${message.role}-${index}`">
+    <template v-for="({ message, timeLabel }, index) in visibleMessageEntries" :key="message.message_id ?? `${message.role}-${index}`">
+      <time v-if="timeLabel" class="message-time-separator" :datetime="message.created_at">{{ timeLabel }}</time>
       <MessageBubble
         :message="message"
         :is-streaming="isStreaming && index === visibleMessages.length - 1"
@@ -463,6 +488,15 @@ defineExpose({
 
 .message-list.compact {
   padding: var(--space-10);
+}
+
+.message-time-separator {
+  align-self: center;
+  margin: var(--space-8) 0 var(--space-16);
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.4;
 }
 
 /* Completed offscreen messages retain their measured scroll size while

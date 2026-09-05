@@ -12,6 +12,7 @@ import ChatBubble from '../ChatBubble.vue'
 import MessageBubble from '../MessageBubble.vue'
 import MessageList from '../MessageList.vue'
 import ToolBubble from '../ToolBubble.vue'
+import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 describe('ChatBubble user references', () => {
@@ -42,35 +43,28 @@ describe('ChatBubble user references', () => {
     expect(wrapper.find('.bubble.user').exists()).toBe(false)
   })
 
-  it('renders a grey timestamp to the left of the user bubble', () => {
-    const wrapper = mount(ChatBubble, {
-      global: { plugins: [createPinia()] },
+  it.each(['chat', 'tool'] as const)('renders full-date separators only at 30-minute boundaries in %s mode', (mode) => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: vi.fn(), configurable: true, writable: true })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useSettingsStore().$patch({ chatMode: mode })
+    const wrapper = mount(MessageList, {
+      global: { plugins: [pinia] },
       props: {
-        message: { role: 'user', content: '带时间的问题', created_at: '2026-08-30T08:01:00Z' },
-        userAvatar: 'user.png',
-        agentAvatar: 'agent.png',
+        messages: [
+          { message_id: 'm1', role: 'user', content: '第一条', created_at: '2026-08-30T08:01:00' },
+          { message_id: 'm2', role: 'assistant', content: '相隔不足三十分钟', node: 'agent', created_at: '2026-08-30T08:30:59' },
+          { message_id: 'm3', role: 'user', content: '正好相隔三十分钟', created_at: '2026-08-30T09:00:59' },
+          { message_id: 'm4', role: 'assistant', content: '缺失有效时间', node: 'agent', created_at: 'invalid' },
+        ],
       },
     })
 
-    const timestamp = wrapper.get('.message-time')
-    const bubbleColumn = wrapper.get('.bubble-col')
-    expect(timestamp.text()).toBeTruthy()
-    expect(timestamp.element.compareDocumentPosition(bubbleColumn.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(timestamp.classes()).toContain('message-time')
-  })
-
-  it('renders the same user timestamp in tool mode', () => {
-    const wrapper = mount(ToolBubble, {
-      global: { plugins: [createPinia()] },
-      props: {
-        message: { role: 'user', content: '工具模式问题', created_at: '2026-08-30T08:01:00Z' },
-        userAvatar: 'user.png', agentAvatar: 'agent.png',
-      },
-    })
-
-    const timestamp = wrapper.get('.message-time')
-    expect(timestamp.text()).toBeTruthy()
-    expect(timestamp.element.compareDocumentPosition(wrapper.get('.bubble-col').element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(wrapper.findAll('.message-time-separator').map((item) => item.text())).toEqual([
+      '2026年08月30日 08:01',
+      '2026年08月30日 09:00',
+    ])
+    expect(wrapper.findAll('.message-time')).toHaveLength(0)
   })
 
   it('renders the reference above the user message', () => {
