@@ -11,8 +11,17 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import IcIcon from '@/components/common/IcIcon.vue'
-import { deduplicateKnowledgeGraph, fetchKnowledgeGraph, getDedupStatus, readKnowledgeFile } from '@/api/knowledge'
+import {
+  clearKnowledgeGraphDocument,
+  deduplicateKnowledgeGraph,
+  deleteKnowledgeGraphNode,
+  fetchKnowledgeGraph,
+  getDedupStatus,
+  readKnowledgeFile,
+} from '@/api/knowledge'
 import { listLibraryItems, listLibraryTags } from '@/api/library'
+import GraphDetailsSidebar from '@/components/editor_workspace/GraphDetailsSidebar.vue'
+import GraphNodeContextMenu from '@/components/editor_workspace/GraphNodeContextMenu.vue'
 import KnowledgeGraphCanvas from '@/components/knowledge_graph/KnowledgeGraphCanvas.vue'
 import { buildFileTreeGraph } from '@/components/knowledge_graph/fileTreeGraphAdapter'
 import { buildLibraryGraph } from '@/components/knowledge_graph/libraryGraphAdapter'
@@ -22,7 +31,7 @@ import { flattenWikiFiles } from '@/components/editor_workspace/wikiLinks'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeSemanticGraphResponse, LibraryItem, LibraryTag } from '@/types/knowledge'
-import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
+import type { KnowledgeGraphNodeContextEvent, KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
 const emit = defineEmits<{
   'open-node': [node: KnowledgeGraphNodeEvent]
@@ -80,6 +89,9 @@ let graphModeResizeObserver: ResizeObserver | null = null
 // Sidebar state
 const sidebarOpen = ref(false)
 const searchQuery = ref('')
+const contextMenuRef = ref<InstanceType<typeof GraphNodeContextMenu> | null>(null)
+const contextMenu = ref<{ open: boolean; node: KnowledgeGraphNodeEvent | null }>({ open: false, node: null })
+const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 
 function basename(path: string): string {
   return path.replace(/[\\/]+$/g, '').split(/[\\/]/).filter(Boolean).pop() ?? 'Knowledge Root'
@@ -203,6 +215,86 @@ function handleNodeSelect(node: KnowledgeGraphNodeEvent) {
 function handleNodeOpen(node: KnowledgeGraphNodeEvent) {
   selectedNode.value = node
   emit('open-node', node)
+}
+
+/** Open the semantic-node menu and keep its surface inside the viewport. */
+async function handleNodeContext(event: KnowledgeGraphNodeContextEvent) {
+  if (graphMode.value !== 'semantic' || !['document', 'entity'].includes(event.node.kind)) return
+  contextMenu.value = { open: true, node: event.node }
+  contextMenuStyle.value = { left: `${event.clientX}px`, top: `${event.clientY}px` }
+  await nextTick()
+  const rect = contextMenuRef.value?.getBoundingClientRect()
+  if (!rect) return
+  contextMenuStyle.value = {
+    left: `${Math.max(0, event.clientX - Math.max(0, rect.right - window.innerWidth))}px`,
+    top: `${Math.max(0, event.clientY - Math.max(0, rect.bottom - window.innerHeight))}px`,
+  }
+}
+
+/** Close the node menu without changing graph selection. */
+function closeNodeContextMenu() {
+  contextMenu.value.open = false
+}
+
+/** Reveal the existing graph details sidebar for the context node. */
+function showNodeDetails() {
+  const node = contextMenu.value.node
+  closeNodeContextMenu()
+  if (!node) return
+  selectedNode.value = node
+  sidebarOpen.value = true
+  searchQuery.value = ''
+}
+
+/** Open a semantic document in the workspace's existing editor sidebar. */
+async function openDocumentNode() {
+  const node = contextMenu.value.node
+  closeNodeContextMenu()
+  if (!node?.path) return
+  const normalizedPath = node.path.replace(/\\/g, '/')
+  const fileNode = workspaceStore.flatNodes.find((candidate) => candidate.path === normalizedPath) ?? {
+    name: node.label,
+    path: normalizedPath,
+    isDir: false,
+  }
+  await workspaceStore.openEditorSidebar(fileNode)
+}
+
+/** Copy the context node's visible label through the native Clipboard API. */
+async function copyNodeName() {
+  const node = contextMenu.value.node
+  closeNodeContextMenu()
+  if (!node) return
+  await navigator.clipboard?.writeText(node.label)
+}
+
+/** Persist entity deletion and reload the semantic model returned by the backend. */
+async function deleteEntityNode() {
+  const node = contextMenu.value.node
+  closeNodeContextMenu()
+  if (!node || !settingsStore.profile.userId) return
+  try {
+    await deleteKnowledgeGraphNode(settingsStore.profile.userId, node.id)
+    selectedNode.value = null
+    sidebarOpen.value = false
+    await loadSemanticGraph()
+  } catch (error) {
+    workspaceStore.showToast(error instanceof Error ? error.message : '删除图谱节点失败')
+  }
+}
+
+/** Clear one document's contributed graph and retain the document itself. */
+async function clearDocumentNode() {
+  const node = contextMenu.value.node
+  closeNodeContextMenu()
+  if (!node || !settingsStore.profile.userId) return
+  try {
+    await clearKnowledgeGraphDocument(settingsStore.profile.userId, node.id)
+    selectedNode.value = node
+    await loadSemanticGraph()
+  } catch (error) {
+    workspaceStore.showToast(error instanceof Error ? error.message : '清空图谱节点失败')
+  }
 }
 
 function refreshGraph() {
@@ -365,6 +457,7 @@ async function pollDedupProgress() {
 }
 
 onUnmounted(() => {
+  document.removeEventListener('click', closeNodeContextMenu)
   graphModeResizeObserver?.disconnect()
   graphModeResizeObserver = null
   if (dedupTimer) {
@@ -373,17 +466,8 @@ onUnmounted(() => {
   }
 })
 
-function kindLabel(kind: string): string {
-  if (kind === 'root') return '根'
-  if (kind === 'folder') return '文件夹'
-  if (kind === 'file') return '文件'
-  if (kind === 'virtual-group') return '集锦'
-  if (kind === 'document') return '文档'
-  if (kind === 'entity') return '实体'
-  return kind
-}
-
 onMounted(() => {
+  document.addEventListener('click', closeNodeContextMenu)
   updateGraphModeSlider()
   graphModeResizeObserver = new ResizeObserver(updateGraphModeSlider)
   if (graphModeRef.value) graphModeResizeObserver.observe(graphModeRef.value)
@@ -542,87 +626,31 @@ watch([compactToolbar, compressedToolbar], updateGraphModeSlider)
         :show-labels="showGraphLabels"
         @node-open="handleNodeOpen"
         @node-select="handleNodeSelect"
+        @node-context="handleNodeContext"
       />
 
-      <!-- Sidebar toggle tab -->
-      <button
-        class="sidebar-tab"
-        :class="{ open: sidebarOpen }"
-        type="button"
-        :title="sidebarOpen ? '关闭节点面板' : '节点面板'"
-        @click="sidebarOpen = !sidebarOpen"
-      >
-        <IcIcon name="search" :size="14" />
-      </button>
+      <GraphNodeContextMenu
+        v-if="contextMenu.open && contextMenu.node"
+        ref="contextMenuRef"
+        :node="contextMenu.node"
+        :menu-style="contextMenuStyle"
+        @details="showNodeDetails"
+        @open="openDocumentNode"
+        @copy-name="copyNodeName"
+        @delete="deleteEntityNode"
+        @clear="clearDocumentNode"
+      />
 
-      <!-- Sidebar -->
-      <aside class="graph-sidebar" :class="{ open: sidebarOpen }">
-        <div class="sidebar-header">
-          <span class="sidebar-title">节点搜索</span>
-          <button class="sidebar-close" type="button" @click="sidebarOpen = false">
-            <IcIcon name="close" :size="14" />
-          </button>
-        </div>
-
-        <!-- Search input -->
-        <div class="sidebar-search">
-          <IcIcon name="search" :size="14" class="search-icon" />
-          <input
-            v-model="searchQuery"
-            class="search-input"
-            type="text"
-            placeholder="搜索节点名称..."
-          />
-        </div>
-
-        <!-- Search results -->
-        <div v-if="searchQuery && searchResults.length > 0" class="sidebar-section">
-          <div class="sidebar-label">搜索结果</div>
-          <div class="search-tags">
-            <button
-              v-for="node in searchResults"
-              :key="node.id"
-              class="search-tag"
-              :class="{ active: node.id === selectedNode?.id }"
-              type="button"
-              @click="selectNodeById(node.id)"
-            >
-              {{ node.label }}
-            </button>
-          </div>
-        </div>
-        <div v-else-if="searchQuery && searchResults.length === 0" class="sidebar-empty">
-          无匹配节点
-        </div>
-
-        <!-- Selected node info -->
-        <div v-if="selectedNode" class="sidebar-section">
-          <div class="sidebar-label">选中节点</div>
-          <div class="selected-node-name">
-            <span class="selected-node-kind-tag" :class="selectedNode.kind">{{ kindLabel(selectedNode.kind) }}</span>
-            {{ selectedNode.label }}
-          </div>
-        </div>
-
-        <!-- Connected nodes -->
-        <div v-if="connectedNodes.length > 0" class="sidebar-section sidebar-section-grow">
-          <div class="sidebar-label">关联节点 ({{ connectedNodes.length }})</div>
-          <div class="connected-list">
-            <button
-              v-for="node in connectedNodes"
-              :key="node.id"
-              class="connected-item"
-              :class="{ active: node.id === selectedNode?.id }"
-              :title="node.path || node.label"
-              type="button"
-              @click="selectNodeById(node.id)"
-            >
-              <span class="connected-kind-tag" :class="node.kind">{{ kindLabel(node.kind) }}</span>
-              <span class="connected-name">{{ node.label }}</span>
-            </button>
-          </div>
-        </div>
-      </aside>
+      <GraphDetailsSidebar
+        v-model:search-query="searchQuery"
+        :open="sidebarOpen"
+        :selected-node="selectedNode"
+        :search-results="searchResults"
+        :connected-nodes="connectedNodes"
+        @toggle="sidebarOpen = !sidebarOpen"
+        @close="sidebarOpen = false"
+        @select-node="selectNodeById"
+      />
     </div>
   </section>
 </template>
@@ -828,256 +856,6 @@ watch([compactToolbar, compressedToolbar], updateGraphModeSlider)
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-}
-
-/* Sidebar toggle pill on the right edge */
-.sidebar-tab {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-right: 0;
-  border-radius: 8px 0 0 8px;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  transform: translateY(-50%);
-}
-.sidebar-tab:hover,
-.sidebar-tab.open {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-/* Sidebar panel */
-.graph-sidebar {
-  display: flex;
-  flex-direction: column;
-  width: 0;
-  min-width: 0;
-  overflow: hidden;
-  border-left: 0;
-  background: var(--color-surface);
-  transition:
-    width 250ms ease,
-    border-left-color 250ms ease;
-}
-.graph-sidebar.open {
-  width: 280px;
-  border-left: 0;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-8) var(--space-12);
-  border-bottom: 0;
-}
-
-.sidebar-title {
-  font-size: calc(12px * var(--font-scale));
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.sidebar-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-.sidebar-close:hover {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-}
-
-/* Search */
-.sidebar-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  margin: var(--space-8) var(--space-12);
-  padding: var(--space-4) var(--space-8);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface-raised);
-}
-
-.search-icon {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
-.search-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text);
-  font-size: calc(12px * var(--font-scale));
-  outline: none;
-}
-
-.search-input::placeholder {
-  color: var(--color-text-muted);
-}
-
-/* Sections */
-.sidebar-section {
-  padding: var(--space-4) var(--space-12);
-}
-
-.sidebar-section-grow {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.sidebar-label {
-  margin-bottom: var(--space-4);
-  color: var(--color-text-muted);
-  font-size: calc(10px * var(--font-scale));
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.sidebar-empty {
-  padding: var(--space-8) var(--space-12);
-  color: var(--color-text-muted);
-  font-size: calc(12px * var(--font-scale));
-}
-
-/* Search result pills */
-.search-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.search-tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font-size: calc(11px * var(--font-scale));
-  white-space: nowrap;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.search-tag:hover {
-  border-color: var(--color-primary);
-}
-.search-tag.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-/* Selected node */
-.selected-node-name {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-6) 0;
-  font-size: calc(12px * var(--font-scale));
-  color: var(--color-text);
-}
-
-.selected-node-kind-tag,
-.connected-kind-tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: calc(10px * var(--font-scale));
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.selected-node-kind-tag.entity,
-.connected-kind-tag.entity {
-  border: 1px solid var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-  color: var(--color-accent);
-}
-
-.selected-node-kind-tag.document,
-.connected-kind-tag.document {
-  border: 1px solid var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.selected-node-kind-tag.file,
-.connected-kind-tag.file {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-}
-
-.selected-node-kind-tag.folder,
-.connected-kind-tag.folder,
-.selected-node-kind-tag.virtual-group,
-.connected-kind-tag.virtual-group {
-  border: 1px solid var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-/* Connected nodes list */
-.connected-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.connected-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  width: 100%;
-  padding: var(--space-4) var(--space-6);
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: calc(12px * var(--font-scale));
-  text-align: left;
-  cursor: pointer;
-}
-.connected-item:hover {
-  background: var(--color-primary-softer);
-  color: var(--color-text);
-}
-.connected-item.active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.connected-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 去重进度条 */

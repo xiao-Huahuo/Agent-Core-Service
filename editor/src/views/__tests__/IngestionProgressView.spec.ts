@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import IngestionProgressView from '@/views/IngestionProgressView.vue'
 
 const cancelIngestionJob = vi.fn().mockResolvedValue(undefined)
+const cancelGraphTask = vi.fn().mockResolvedValue(undefined)
 const loadIngestionJobs = vi.fn().mockResolvedValue([])
 const settingsStore = {
   profile: { knowledgeDir: 'D:/Knowledge' },
@@ -46,6 +47,7 @@ const workspaceStore = {
   graphHistory: [],
   loadIngestionJobs,
   cancelIngestionJob,
+  cancelGraphTask,
   clearIngestionHistory: vi.fn(),
   clearGraphHistory: vi.fn(),
   loadKnowledgeTree: vi.fn().mockResolvedValue(undefined),
@@ -94,5 +96,16 @@ describe('IngestionProgressView', () => {
 
     expect(wrapper.text()).toContain('所在位置绝对路径')
     expect(wrapper.text()).toContain('D:\\Knowledge\\notes\\note.md')
+  })
+
+  it('offers graph cancellation and targets the exact graph queue row', async () => {
+    workspaceStore.ingestionViewTab = 'graph-queue'
+    const wrapper = mount(IngestionProgressView, {
+      global: { stubs: { IcIcon: true } },
+    })
+
+    await wrapper.get('button[aria-label="中止 note.md 图谱抽取"]').trigger('click')
+
+    expect(cancelGraphTask).toHaveBeenCalledWith(workspaceStore.graphQueue[0])
   })
 })

@@ -522,11 +522,13 @@ class AgentConfig:
         )
         knowledge_graph_extraction_system_prompt: str = (
             "你是知识图谱抽取器。只从给定文本中抽取明确出现的实体和关系，不要推理文本没有表达的事实。"
+            "必须抽取文本明确表达的实体—实体关系，包括 A→B→C 这类二层及更深的多跳关系链，不能只返回文档—实体关联。"
             "只输出合法 JSON，不要输出解释。关系两端必须来自 entities.name，每条关系必须有原文 evidence。"
             "不确定就不要抽取。输出结构固定为 {\"entities\":[],\"relations\":[]}。"
         )
         knowledge_graph_batch_system_prompt: str = (
             "你是知识图谱批量抽取器。输入包含多个章节，必须逐章抽取明确实体和关系并保持 section_id 不变。"
+            "每章必须保留明确表达的实体—实体多跳关系链，不能只返回文档—实体关联。"
             "不要推理原文未表达的事实，只输出合法 JSON。"
             "输出结构固定为 {\"sections\":[{\"section_id\":\"...\",\"entities\":[],\"relations\":[]}]}。"
         )

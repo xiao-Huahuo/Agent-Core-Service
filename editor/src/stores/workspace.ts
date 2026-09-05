@@ -15,6 +15,7 @@ import { searchAllLibraries } from '@/api/unifiedSearch'
 import type { GraphDocStatus, KnowledgeIngestionJob } from '@/api/knowledge'
 import {
   buildKnowledgeEventsUrl,
+  cancelKnowledgeGraphTask,
   cancelKnowledgeIngestionJob,
   copyKnowledgePath,
   createKnowledgeIngestionJobs,
@@ -71,7 +72,7 @@ function createId(prefix: string): string {
 export function calculateGraphProgress(docs: GraphDocStatus[], total: number): number {
   if (total <= 0) return 0
   const completedProgress = docs.reduce((sum, doc) => {
-    if (doc.status === 'done' || doc.status === 'skipped' || doc.status === 'failed') return sum + 100
+    if (doc.status === 'done' || doc.status === 'skipped' || doc.status === 'failed' || doc.status === 'cancelled') return sum + 100
     return sum + Math.max(0, Math.min(100, doc.progress ?? 0))
   }, 0)
   return Math.round(completedProgress / total)
@@ -411,6 +412,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Header-level ingestion progress shown while uploads or rebuilds are running. */
   const ingestionProgressVisible = ref(false)
   const ingestionProgress = ref(0)
+  const ingestionProgressDetail = ref('正在检查需要灌库的文件')
   const ingestionProgressStats = ref({ succeeded: 0, total: 0, failed: 0 })
   const ingestionQueue = ref<IngestionQueueItem[]>([])
   const ingestionHistory = ref<IngestionHistoryItem[]>([])
@@ -496,11 +498,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     message?: string,
   ) {
     const finishedAt = new Date().toISOString()
-    if (graphQueue.value.length > 0) {
-      const allFinished = graphQueue.value.map((item) => ({
-        ...item,
-        status: status as IngestionQueueItem['status'],
-      }))
+    if (total > 0) {
       const historyItem: IngestionHistoryItem = {
         id: createId('graph_history'),
         name: `图谱抽取 ${finishedAt.slice(0, 16).replace('T', ' ')}`,
@@ -511,7 +509,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         filesSeen: total,
         filesIngested: current,
         filesSkipped: total - current,
-        message: message ?? allFinished[0]?.message,
+        message,
         sourceType: 'graph',
       }
       graphHistory.value = [historyItem, ...graphHistory.value].slice(0, GRAPH_HISTORY_LIMIT)
@@ -523,6 +521,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     stopGraphPolling()
     if (status === 'finished') {
       finishGraphProgress(message ?? '图谱抽取完成')
+    } else if (status === 'cancelled') {
+      finishGraphProgress(message ?? '图谱抽取已中止')
     } else {
       finishGraphProgress(message ?? '图谱抽取失败', true)
     }
@@ -535,7 +535,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
 
     for (const doc of docs) {
-      if (doc.status === 'done' || doc.status === 'skipped' || doc.status === 'failed') {
+      if (doc.status === 'done' || doc.status === 'skipped' || doc.status === 'failed' || doc.status === 'cancelled') {
         updateTreeNodeGraphStatus(doc.path, graphStatusFromGraphDoc(doc))
         queueMap.delete(doc.path)
         continue
@@ -544,20 +544,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (existing) {
         queueMap.set(doc.path, {
           ...existing,
-          status: doc.status === 'processing' ? 'running' as const : 'waiting' as const,
+          status: doc.status === 'processing' ? 'running' as const : doc.status === 'cancelling' ? 'cancelling' as const : 'waiting' as const,
           progress: doc.progress ?? existing.progress,
           stageLabel: doc.stage_label ?? existing.stageLabel,
           stageCurrent: doc.stage_current ?? existing.stageCurrent,
           stageTotal: doc.stage_total ?? existing.stageTotal,
           message: doc.message || (doc.status === 'processing' ? message : existing.message),
         })
-      } else if (doc.status === 'pending' || doc.status === 'processing') {
+      } else if (doc.status === 'pending' || doc.status === 'processing' || doc.status === 'cancelling') {
         queueMap.set(doc.path, {
           id: `graph_doc_${doc.path}`,
           name: doc.name,
           path: doc.path,
           isDir: false,
-          status: doc.status === 'processing' ? 'running' as const : 'waiting' as const,
+          status: doc.status === 'processing' ? 'running' as const : doc.status === 'cancelling' ? 'cancelling' as const : 'waiting' as const,
           progress: doc.progress ?? 0,
           stageLabel: doc.stage_label,
           stageCurrent: doc.stage_current,
@@ -615,9 +615,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         return
       }
       if (status.status === 'completed') {
-        graphQueue.value = []
         setGraphProgress(100)
         completeGraphQueue('finished', status.total, status.current, status.message || '图谱抽取完成')
+        return
+      }
+      if (status.status === 'cancelled') {
+        setGraphProgress(100)
+        completeGraphQueue('cancelled', status.total, status.current, status.message || '图谱抽取已中止')
         return
       }
       if (status.status === 'failed') {
@@ -1127,6 +1131,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     stopIngestionProgressPulse()
     ingestionProgressVisible.value = true
+    ingestionProgressDetail.value = '正在检查需要灌库的文件'
     ingestionProgressStats.value = { succeeded: 0, total: 0, failed: 0 }
     setIngestionProgress(initialValue)
   }
@@ -1997,6 +2002,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function syncPersistentIngestionJobs(jobs: KnowledgeIngestionJob[]) {
     const activeStatuses = new Set(['queued', 'running', 'cancelling'])
     const activeJobs = jobs.filter((job) => activeStatuses.has(job.status))
+    const hadActiveJobs = ingestionQueue.value.length > 0
+    activeJobs.forEach((job) => trackedIngestionJobIds.add(job.job_id))
     ingestionQueue.value = activeJobs.map(ingestionJobToQueueItem)
     const trackedBatch = jobs.filter((job) => trackedIngestionJobIds.has(job.job_id))
     const activeCutoff = activeJobs.reduce(
@@ -2006,12 +2013,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const currentBatch = trackedBatch.length > 0
       ? trackedBatch
       : (activeCutoff ? jobs.filter((job) => job.created_at >= activeCutoff) : [])
+    if (activeJobs.length > 0 && !ingestionProgressVisible.value) beginIngestionProgress(0)
     ingestionQueuePlannedTotal = currentBatch.length
     const succeeded = currentBatch.filter((job) => job.status === 'finished').length
     const failed = currentBatch.filter((job) => ['failed', 'cancelled'].includes(job.status)).length
-    const totalProgress = currentBatch.reduce((sum, job) => sum + job.progress, 0)
+    const totalProgress = currentBatch.reduce(
+      (sum, job) => sum + (['cancelled', 'finished', 'skipped', 'failed'].includes(job.status) ? 100 : job.progress),
+      0,
+    )
     setIngestionProgress(currentBatch.length ? totalProgress / currentBatch.length : 0)
     setIngestionProgressStats(succeeded, currentBatch.length, failed)
+    const activeJob = activeJobs.find((job) => job.status === 'running' || job.status === 'cancelling') ?? activeJobs[0]
+    const lastCancelled = currentBatch.find((job) => job.status === 'cancelled')
+    if (activeJob) {
+      const stageCount = activeJob.stage_total ? ` · ${activeJob.stage_current}/${activeJob.stage_total}` : ''
+      ingestionProgressDetail.value = `${activeJob.name} · ${activeJob.stage_label || '等待灌库'}${stageCount}`
+    } else if (lastCancelled) {
+      ingestionProgressDetail.value = `${lastCancelled.name} · 已中止`
+    } else if (currentBatch.length > 0) {
+      ingestionProgressDetail.value = '灌库任务已结束'
+    }
     jobs.forEach((job) => {
       if (activeStatuses.has(job.status)) updateTreeNodeIndexStatus(job.path, 'indexing', { force: true })
       else if (job.status === 'finished') updateTreeNodeIndexStatus(job.path, 'indexed', { force: true })
@@ -2041,6 +2062,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       ...ingestionHistory.value.filter((row) => !row.id.startsWith('ingest_')),
     ].slice(0, 200)
     persistIngestionHistory()
+    if (hadActiveJobs && activeJobs.length === 0 && activeIngestionRuns === 0) finishIngestionProgress()
   }
 
   async function loadIngestionJobs(): Promise<KnowledgeIngestionJob[]> {
@@ -2102,6 +2124,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       showToast(`已中止 ${item.name}，文件保持未灌库状态`)
     } catch (error) {
       showToast(`中止失败 — ${error instanceof Error ? error.message : '未知错误'}`)
+    }
+  }
+
+  async function cancelGraphTask(item: IngestionQueueItem) {
+    const userId = useSettingsStore().profile.userId
+    if (!userId) return
+    graphQueue.value = graphQueue.value.map((row) => (
+      row.path === item.path
+        ? { ...row, status: 'cancelling', stageLabel: '正在中止图谱抽取', message: '已请求中止，正在等待当前步骤结束' }
+        : row
+    ))
+    graphProgressDetail.value = `正在中止图谱任务：${item.name}`
+    try {
+      await cancelKnowledgeGraphTask(userId, item.path)
+      await pollGraphStatus()
+    } catch (error) {
+      showToast(`中止失败 — ${error instanceof Error ? error.message : '未知错误'}`)
+      await pollGraphStatus()
     }
   }
 
@@ -2883,6 +2923,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     conflictDialog,
     refreshing,
     ingestionProgress,
+    ingestionProgressDetail,
     ingestionProgressStats,
     ingestionProgressVisible,
     ingestionQueue,
@@ -2980,6 +3021,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ingestFile,
     loadIngestionJobs,
     cancelIngestionJob,
+    cancelGraphTask,
     createFileAt,
     createFolderAt,
     copyNode,

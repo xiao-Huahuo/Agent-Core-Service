@@ -19,7 +19,7 @@ from agent_service.services.knowledge_graph.service import _run_graph_extraction
 
 GraphRunner = Callable[..., None]
 ProgressWriter = Callable[..., None]
-_TERMINAL_DOC_STATUSES = {"done", "skipped", "failed"}
+_TERMINAL_DOC_STATUSES = {"done", "skipped", "failed", "cancelled"}
 
 
 @dataclass(slots=True)
@@ -30,6 +30,7 @@ class _GraphQueueTask:
     display_path: str
     display_name: str
     runner_kwargs: dict[str, Any]
+    cancel_event: threading.Event
     doc_paths: set[str] = field(default_factory=set)
     last_status: str = "running"
 
@@ -95,10 +96,12 @@ class KnowledgeGraphQueueService:
                 state.docs.clear()
                 state.message = ""
                 state.result_json = ""
+            cancel_event = threading.Event()
             task = _GraphQueueTask(
                 identity=identity,
                 display_path=target_display_path,
                 display_name=Path(target_display_path).name if target_display_path else "全部文件",
+                cancel_event=cancel_event,
                 runner_kwargs={
                     "config": config,
                     "user_id": user_id,
@@ -108,7 +111,7 @@ class KnowledgeGraphQueueService:
                     "target_source_path": target_source_path,
                     "target_is_dir": target_is_dir,
                     "force": force,
-                    "cancel_event": self._stop_event,
+                    "cancel_event": cancel_event,
                 },
             )
             state.pending.append(task)
@@ -136,9 +139,51 @@ class KnowledgeGraphQueueService:
 
         self._stop_event.set()
         with self._lock:
+            for state in self._states.values():
+                for task in (*state.pending, *state.active.values()):
+                    task.cancel_event.set()
             threads = [thread for state in self._states.values() for thread in state.threads]
         for thread in threads:
             thread.join(timeout=5)
+
+    def cancel(self, *, user_id: str, library_id: str, identity: str) -> dict[str, str] | None:
+        """取消指定知识库内一个等待中或运行中的任务，不影响同队列其他任务。"""
+
+        key = (user_id, library_id)
+        with self._lock:
+            state = self._states.get(key)
+            if state is None or identity not in state.in_flight:
+                return None
+            pending_task = next((task for task in state.pending if task.identity == identity), None)
+            if pending_task is not None:
+                state.pending.remove(pending_task)
+                pending_task.cancel_event.set()
+                pending_task.last_status = "cancelled"
+                state.in_flight.discard(identity)
+                self._mark_task_cancelled(state, pending_task)
+                state.message = f"已中止图谱任务：{pending_task.display_name}"
+                status = "running" if state.pending or state.active else self._final_status(state)
+                self._publish_locked(key, state, status=status)
+                return {"status": "cancelled", "message": "图谱任务已中止"}
+
+            active_task = state.active.get(identity)
+            if active_task is None:
+                return None
+            active_task.cancel_event.set()
+            active_task.last_status = "cancelled"
+            paths = active_task.doc_paths or {active_task.identity}
+            for path in paths:
+                doc = state.docs.get(path, self._pending_doc(active_task))
+                state.docs[path] = {
+                    **doc,
+                    "status": "cancelling",
+                    "stage": "cancelling",
+                    "stage_label": "正在中止图谱抽取",
+                    "message": "已请求中止，正在等待当前步骤结束",
+                }
+            state.message = f"正在中止图谱任务：{active_task.display_name}"
+            self._publish_locked(key, state, status="running")
+            return {"status": "cancelling", "message": "图谱任务正在中止"}
 
     def _worker(self, key: tuple[str, str]) -> None:
         """持续领取同一知识库的新任务，直到等待队列真正为空。"""
@@ -189,7 +234,8 @@ class KnowledgeGraphQueueService:
 
         with self._lock:
             state = self._states[key]
-            task.last_status = str(payload.get("status") or task.last_status)
+            reported_status = str(payload.get("status") or task.last_status)
+            task.last_status = "cancelled" if task.cancel_event.is_set() else reported_status
             docs = payload.get("docs")
             if isinstance(docs, list) and docs:
                 state.docs.pop(task.identity, None)
@@ -200,7 +246,9 @@ class KnowledgeGraphQueueService:
                     state.docs[path] = doc
             state.message = str(payload.get("message") or state.message)
             state.result_json = str(payload.get("result_json") or state.result_json)
-            if task.last_status in {"failed", "cancelled"} and not task.doc_paths:
+            if task.last_status == "cancelled":
+                self._mark_task_cancelled(state, task)
+            elif task.last_status == "failed" and not task.doc_paths:
                 state.docs[task.identity] = {
                     **state.docs.get(task.identity, self._pending_doc(task)),
                     "status": "failed",
@@ -210,6 +258,21 @@ class KnowledgeGraphQueueService:
                     "message": state.message,
                 }
             self._publish_locked(key, state, status="running")
+
+    @classmethod
+    def _mark_task_cancelled(cls, state: _GraphQueueState, task: _GraphQueueTask) -> None:
+        """把任务当前映射出的全部文档行归一为可聚合的取消终态。"""
+
+        for path in task.doc_paths or {task.identity}:
+            doc = state.docs.get(path, cls._pending_doc(task))
+            state.docs[path] = {
+                **doc,
+                "status": "cancelled",
+                "progress": 100,
+                "stage": "cancelled",
+                "stage_label": "已中止图谱抽取",
+                "message": state.message or "图谱抽取已中止",
+            }
 
     @staticmethod
     def _pending_doc(task: _GraphQueueTask) -> dict[str, Any]:
@@ -232,7 +295,7 @@ class KnowledgeGraphQueueService:
         """保证执行器退出时当前任务的所有行都离开在途状态。"""
 
         paths = task.doc_paths or {task.identity}
-        fallback_status = "failed" if task.last_status in {"failed", "cancelled"} else "skipped"
+        fallback_status = "cancelled" if task.last_status == "cancelled" else "failed" if task.last_status == "failed" else "skipped"
         for path in paths:
             doc = state.docs.get(path)
             if doc is None or str(doc.get("status")) in _TERMINAL_DOC_STATUSES:
@@ -242,7 +305,11 @@ class KnowledgeGraphQueueService:
                 "status": fallback_status,
                 "progress": 100,
                 "stage": fallback_status,
-                "stage_label": "图谱抽取失败" if fallback_status == "failed" else "无需重新抽取",
+                "stage_label": (
+                    "已中止图谱抽取" if fallback_status == "cancelled"
+                    else "图谱抽取失败" if fallback_status == "failed"
+                    else "无需重新抽取"
+                ),
             }
 
     @staticmethod
@@ -250,6 +317,8 @@ class KnowledgeGraphQueueService:
         """仅在所有文档都失败时报告整体失败，否则完成并保留逐行结果。"""
 
         docs = list(state.docs.values())
+        if any(doc.get("status") == "cancelled" for doc in docs):
+            return "cancelled"
         return "failed" if docs and all(doc.get("status") == "failed" for doc in docs) else "completed"
 
     def _publish_locked(self, key: tuple[str, str], state: _GraphQueueState, *, status: str) -> None:

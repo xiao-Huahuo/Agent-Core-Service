@@ -272,10 +272,31 @@ export function fetchKnowledgeGraph(userId: string, limit = 2000): Promise<Knowl
   })
 }
 
+export interface KnowledgeGraphMutationResult {
+  ok: boolean
+  deleted_nodes: number
+  deleted_edges: number
+}
+
+/** Delete one persisted entity node together with every incident edge. */
+export function deleteKnowledgeGraphNode(userId: string, nodeId: string): Promise<KnowledgeGraphMutationResult> {
+  return apiDelete<KnowledgeGraphMutationResult>(
+    `${API_ROUTES.KNOWLEDGE_GRAPH_NODES}/${encodeURIComponent(nodeId)}?user_id=${encodeURIComponent(userId)}`,
+  )
+}
+
+/** Clear one document's contributed entity graph while preserving its document node. */
+export function clearKnowledgeGraphDocument(userId: string, nodeId: string): Promise<KnowledgeGraphMutationResult> {
+  return apiPost<KnowledgeGraphMutationResult>(
+    `${API_ROUTES.KNOWLEDGE_GRAPH_NODES}/${encodeURIComponent(nodeId)}/clear`,
+    { user_id: userId },
+  )
+}
+
 export interface GraphDocStatus {
   path: string
   name: string
-  status: 'pending' | 'processing' | 'done' | 'skipped' | 'failed'
+  status: 'pending' | 'processing' | 'cancelling' | 'cancelled' | 'done' | 'skipped' | 'failed'
   progress?: number
   total_sections?: number
   stage?: string
@@ -286,7 +307,7 @@ export interface GraphDocStatus {
 }
 
 export interface GraphRebuildStatus {
-  status: 'idle' | 'running' | 'completed' | 'failed'
+  status: 'idle' | 'running' | 'cancelled' | 'completed' | 'failed'
   total: number
   current: number
   message: string
@@ -296,6 +317,11 @@ export interface GraphRebuildStatus {
 
 export function rebuildKnowledgeGraph(userId: string, path?: string, force = false): Promise<{ status: string; message: string }> {
   return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD, { user_id: userId, path, force })
+}
+
+/** Cancel one queued or running graph extraction task by its knowledge-root-relative path. */
+export function cancelKnowledgeGraphTask(userId: string, path: string): Promise<{ status: string; message: string }> {
+  return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD_CANCEL, { user_id: userId, path })
 }
 
 export interface DedupStatus {

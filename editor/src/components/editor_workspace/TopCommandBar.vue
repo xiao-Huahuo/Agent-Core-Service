@@ -62,12 +62,18 @@ const emit = defineEmits<{
 const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
 /** Compact live graph stage shown beside the aggregate header progress bar. */
 const graphProgressLabel = computed(() => {
-  const active = workspaceStore.graphQueue.find((item) => item.status === 'running')
+  const active = workspaceStore.graphQueue.find((item) => item.status === 'running' || item.status === 'cancelling')
   const stats = workspaceStore.graphProgressStats
   const stageCount = active?.stageTotal
     ? ` ${active.stageCurrent ?? 0}/${active.stageTotal}`
     : ''
-  return `图谱 ${stats.current}/${stats.total} · ${active?.stageLabel ?? '准备中'}${stageCount}`
+  return `图谱 ${stats.current}/${stats.total} · ${active?.stageLabel ?? (workspaceStore.graphProgressDetail || '准备中')}${stageCount}`
+})
+/** Match graph progress density with the current ingestion file and stage. */
+const ingestionProgressLabel = computed(() => {
+  const stats = workspaceStore.ingestionProgressStats
+  const completed = Math.min(stats.total, stats.succeeded + stats.failed)
+  return `入库 ${completed}/${stats.total} · ${workspaceStore.ingestionProgressDetail}`
 })
 const agentActive = computed(() => workspaceStore.agentSidebarOpen)
 const todoActive = computed(() => workspaceStore.todoSidebarOpen)
@@ -92,7 +98,13 @@ async function handleCloseWindow() {
       <div class="brand-copy">
         <img :src="titleSrc" class="brand-title" alt="MetaWeave" />
       </div>
-      <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
+      <div
+        v-if="workspaceStore.ingestionProgressVisible"
+        class="ingestion-progress"
+        :title="workspaceStore.ingestionProgressDetail"
+        aria-live="polite"
+      >
+        <span class="ingestion-progress-label">{{ ingestionProgressLabel }}</span>
         <span class="ingestion-progress-track" aria-hidden="true">
           <span
             class="ingestion-progress-fill"
@@ -542,7 +554,7 @@ async function handleCloseWindow() {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
-  width: min(140px, 30vw);
+  width: min(300px, 36vw);
   height: 16px;
   padding: 0 var(--space-6);
   border: 1px solid var(--color-border);
@@ -585,6 +597,7 @@ async function handleCloseWindow() {
   color: #14b8a6;
 }
 
+.ingestion-progress-label,
 .graph-progress-label {
   max-width: 164px;
   overflow: hidden;
@@ -593,8 +606,8 @@ async function handleCloseWindow() {
   white-space: nowrap;
 }
 
-.brand:has(.graph-progress) {
-  max-width: min(520px, 52vw);
+.brand:has(.ingestion-progress) {
+  max-width: min(680px, 62vw);
 }
 
 .graph-progress .ingestion-progress-track {

@@ -151,3 +151,10 @@ export interface KnowledgeGraphNodeEvent {
   path: string
   kind: KnowledgeGraphNodeKind
 }
+
+/** Right-click node event with viewport coordinates for a fixed context menu. */
+export interface KnowledgeGraphNodeContextEvent {
+  node: KnowledgeGraphNodeEvent
+  clientX: number
+  clientY: number
+}

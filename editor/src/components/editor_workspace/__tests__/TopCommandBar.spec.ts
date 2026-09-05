@@ -122,4 +122,22 @@ describe('TopCommandBar knowledge-library switcher', () => {
     expect(workspaceStore.loadKnowledgeTree).toHaveBeenCalledOnce()
     expect(workspaceStore.restartFileWatcher).toHaveBeenCalledOnce()
   })
+
+  it('shows live ingestion task, stage counts, and cancellation detail beside the percentage', async () => {
+    const { workspaceStore } = prepareStores()
+    workspaceStore.ingestionProgressVisible = true
+    workspaceStore.ingestionProgress = 45
+    workspaceStore.ingestionProgressDetail = 'paper.pdf · 正在 OCR 扫描页 · 8/20'
+    workspaceStore.ingestionProgressStats = { succeeded: 1, total: 3, failed: 0 }
+    const wrapper = mountTopCommandBar()
+
+    expect(wrapper.get('.ingestion-progress-label').text()).toBe('入库 1/3 · paper.pdf · 正在 OCR 扫描页 · 8/20')
+
+    workspaceStore.ingestionProgress = 100
+    workspaceStore.ingestionProgressDetail = 'paper.pdf · 已中止'
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('.ingestion-progress-label').text()).toContain('paper.pdf · 已中止')
+    expect(wrapper.get('.ingestion-progress-percent').text()).toBe('100%')
+  })
 })

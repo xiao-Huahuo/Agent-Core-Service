@@ -4,7 +4,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  cancelKnowledgeGraphTask,
+  cancelKnowledgeIngestionJob,
   createKnowledgeIngestionJobs,
+  getKnowledgeGraphStatus,
   listKnowledgeIngestionJobs,
   rebuildKnowledgeGraph,
 } from '@/api/knowledge'
@@ -15,7 +18,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 vi.mock('@/api/agent', () => ({ updateCurrentDocumentContext: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@/api/knowledge', () => ({
   buildKnowledgeEventsUrl: vi.fn(() => '/events'),
-  cancelKnowledgeIngestionJob: vi.fn(),
+  cancelKnowledgeGraphTask: vi.fn().mockResolvedValue({ status: 'cancelling', message: 'cancelling' }),
+  cancelKnowledgeIngestionJob: vi.fn().mockResolvedValue(undefined),
   copyKnowledgePath: vi.fn(),
   createKnowledgeFile: vi.fn(),
   createKnowledgeFolder: vi.fn(),
@@ -102,5 +106,53 @@ describe('workspace per-file graph pipeline', () => {
     await Promise.all([store.startGraphRebuild(), store.startGraphRebuild()])
 
     await vi.waitFor(() => expect(createKnowledgeIngestionJobs).toHaveBeenCalledTimes(2))
+  })
+
+  it('updates header ingestion detail and aggregate progress immediately after cancellation', async () => {
+    vi.mocked(listKnowledgeIngestionJobs)
+      .mockResolvedValueOnce({ jobs: [job('first.md', 'running')] })
+      .mockResolvedValue({ jobs: [job('first.md', 'cancelled')] })
+    const store = useWorkspaceStore()
+
+    await store.loadIngestionJobs()
+    expect(store.ingestionProgressVisible).toBe(true)
+    expect(store.ingestionProgressDetail).toContain('first.md · running')
+
+    await store.cancelIngestionJob(store.ingestionQueue[0]!)
+
+    expect(cancelKnowledgeIngestionJob).toHaveBeenCalledWith('user-1', 'job-first.md')
+    expect(store.ingestionProgress).toBe(100)
+    expect(store.ingestionProgressDetail).toBe('first.md · 已中止')
+    expect(store.ingestionProgressStats).toEqual({ succeeded: 0, total: 1, failed: 1 })
+  })
+
+  it('optimistically marks a graph row cancelling and applies the polled terminal state', async () => {
+    vi.mocked(getKnowledgeGraphStatus).mockResolvedValue({
+      status: 'cancelled',
+      total: 1,
+      current: 1,
+      message: '图谱抽取已中止',
+      docs: [{ path: 'first.md', name: 'first.md', status: 'cancelled', progress: 100 }],
+    })
+    const store = useWorkspaceStore()
+    store.graphProgressVisible = true
+    store.graphQueue = [{
+      id: 'graph-first',
+      name: 'first.md',
+      path: 'first.md',
+      isDir: false,
+      status: 'running',
+      progress: 40,
+      stageLabel: '正在抽取实体',
+      queuedAt: '2026-08-31T01:00:01Z',
+    }]
+
+    await store.cancelGraphTask(store.graphQueue[0]!)
+
+    expect(cancelKnowledgeGraphTask).toHaveBeenCalledWith('user-1', 'first.md')
+    expect(store.graphQueue).toEqual([])
+    expect(store.graphProgress).toBe(100)
+    expect(store.graphProgressDetail).toBe('图谱抽取已中止')
+    expect(store.graphHistory[0]?.status).toBe('cancelled')
   })
 })

@@ -76,3 +76,44 @@ def test_graph_queue_runs_two_tasks_concurrently_and_deduplicates_inflight_path(
     assert any(snapshot["total"] == 2 and snapshot["current"] == 0 for snapshot in snapshots)
     assert snapshots[-1]["status"] == "completed"
     assert snapshots[-1]["current"] == snapshots[-1]["total"] == 2
+
+
+def test_graph_queue_cancels_waiting_and_running_tasks_independently(tmp_path: Path) -> None:
+    """终止单个图谱任务不得关闭队列，并须实时发布明确的取消终态。"""
+
+    first_started = threading.Event()
+    snapshots: list[dict[str, Any]] = []
+
+    def writer(_user_id: str, _library_id: str, **payload: Any) -> None:
+        snapshots.append(payload)
+
+    def runner(*, target_source_path: Path, cancel_event: threading.Event, progress_callback: Any, **_kwargs: Any) -> None:
+        path = target_source_path.name
+        progress_callback(status="running", docs=[{
+            "path": path, "name": path, "status": "processing", "progress": 25,
+        }])
+        first_started.set()
+        assert cancel_event.wait(timeout=2)
+        progress_callback(status="cancelled", message=f"已中止 {path}", docs=[{
+            "path": path, "name": path, "status": "processing", "progress": 25,
+        }])
+
+    service = KnowledgeGraphQueueService(runner=runner, progress_writer=writer, max_concurrency=1)
+    common = {
+        "config": object(), "user_id": "u1", "library_id": "lib1",
+        "frontmatter_dir": tmp_path, "user_llm_config": {}, "target_is_dir": False, "force": False,
+    }
+    service.submit(**common, target_source_path=tmp_path / "first.md", target_display_path="first.md")
+    assert first_started.wait(timeout=2)
+    service.submit(**common, target_source_path=tmp_path / "second.md", target_display_path="second.md")
+
+    waiting = service.cancel(user_id="u1", library_id="lib1", identity="second.md")
+    running = service.cancel(user_id="u1", library_id="lib1", identity="first.md")
+    for thread in list(service._states[("u1", "lib1")].threads):
+        thread.join(timeout=2)
+
+    assert waiting == {"status": "cancelled", "message": "图谱任务已中止"}
+    assert running == {"status": "cancelling", "message": "图谱任务正在中止"}
+    assert snapshots[-1]["status"] == "cancelled"
+    assert snapshots[-1]["current"] == snapshots[-1]["total"] == 2
+    assert {doc["status"] for doc in snapshots[-1]["docs"]} == {"cancelled"}

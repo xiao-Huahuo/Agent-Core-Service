@@ -17,6 +17,7 @@ import type {
   KnowledgeGraphLink,
   KnowledgeGraphModel,
   KnowledgeGraphNode,
+  KnowledgeGraphNodeContextEvent,
   KnowledgeGraphNodeEvent,
   KnowledgeGraphRenderTheme,
   KnowledgeGraphViewport,
@@ -31,6 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'node-select': [event: KnowledgeGraphNodeEvent]
   'node-open': [event: KnowledgeGraphNodeEvent]
+  'node-context': [event: KnowledgeGraphNodeContextEvent]
 }>()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -50,11 +52,14 @@ const canvasSize = ref({ width: 1, height: 1 })
 const loadingOverlay = ref(false)
 
 const HOVER_SPREAD_DURATION_MS = 720
+const HOVER_TRIGGER_DELAY_MS = 200
 
 let simulation: Simulation<KnowledgeGraphNode, KnowledgeGraphLink> | null = null
 let resizeObserver: ResizeObserver | null = null
 let animationFrame = 0
 let hoverAnimationFrame = 0
+let hoverTriggerTimer = 0
+let pendingHoverNodeId = ''
 let hoverAnimationNodeId = ''
 let hoverAnimationStartedAt = 0
 let pointerMode: 'none' | 'pan' | 'node' = 'none'
@@ -154,6 +159,33 @@ function setHighlightNode(nodeId: string) {
     hoverAnimationFrame = 0
   }
   requestDraw()
+}
+
+/** Delay passive pointer highlights so crossing a node does not trigger its hover effect. */
+function scheduleHighlightNode(nodeId: string) {
+  if (nodeId && nodeId === pendingHoverNodeId) {
+    return
+  }
+  if (hoverTriggerTimer) {
+    window.clearTimeout(hoverTriggerTimer)
+    hoverTriggerTimer = 0
+  }
+  pendingHoverNodeId = ''
+  if (nodeId === hoveredNodeId.value) {
+    return
+  }
+  if (!nodeId) {
+    setHighlightNode('')
+    return
+  }
+  setHighlightNode('')
+  pendingHoverNodeId = nodeId
+  hoverTriggerTimer = window.setTimeout(() => {
+    hoverTriggerTimer = 0
+    const highlightedNodeId = pendingHoverNodeId
+    pendingHoverNodeId = ''
+    setHighlightNode(highlightedNodeId)
+  }, HOVER_TRIGGER_DELAY_MS)
 }
 
 function draw() {
@@ -289,6 +321,7 @@ function handlePointerDown(event: PointerEvent) {
   viewportStart = { ...viewport.value }
   movedDuringPointer = false
   const node = hitTestNode(runtimeModel.value, screenToWorld(pointerStart, viewport.value))
+  scheduleHighlightNode('')
   if (node) {
     // Dragging a node while frozen auto-unfreezes so the button stays accurate
     if (frozen.value) {
@@ -333,7 +366,7 @@ function handlePointerMove(event: PointerEvent) {
     return
   }
   const nextHover = hitTestNode(runtimeModel.value, world)?.id ?? ''
-  setHighlightNode(nextHover)
+  scheduleHighlightNode(nextHover)
 }
 
 function handlePointerUp(event: PointerEvent) {
@@ -363,7 +396,7 @@ function handlePointerLeave() {
   if (pointerMode !== 'none') {
     return
   }
-  setHighlightNode('')
+  scheduleHighlightNode('')
 }
 
 function handleDoubleClick(event: MouseEvent) {
@@ -376,6 +409,17 @@ function handleDoubleClick(event: MouseEvent) {
   selectNode(node)
   viewport.value = focusNodeViewport(node, canvasSize.value.width, canvasSize.value.height, Math.max(0.95, viewport.value.scale))
   emit('node-open', toNodeEvent(node))
+  requestDraw()
+}
+
+/** Resolve a right-click against the canvas and request a node context menu. */
+function handleContextMenu(event: MouseEvent) {
+  event.preventDefault()
+  const point = pointerPoint(event)
+  const node = hitTestNode(runtimeModel.value, screenToWorld(point, viewport.value))
+  if (!node) return
+  selectedNodeId.value = node.id
+  emit('node-context', { node: toNodeEvent(node), clientX: event.clientX, clientY: event.clientY })
   requestDraw()
 }
 
@@ -404,6 +448,9 @@ onBeforeUnmount(() => {
   }
   if (hoverAnimationFrame) {
     window.cancelAnimationFrame(hoverAnimationFrame)
+  }
+  if (hoverTriggerTimer) {
+    window.clearTimeout(hoverTriggerTimer)
   }
 })
 
@@ -456,6 +503,7 @@ defineExpose({
       :class="{ hovering: hoveredNodeId }"
       aria-label="Knowledge graph canvas"
       @dblclick="handleDoubleClick"
+      @contextmenu="handleContextMenu"
       @pointerdown="handlePointerDown"
       @pointermove="handlePointerMove"
       @pointerup="handlePointerUp"

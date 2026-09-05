@@ -106,6 +106,27 @@ class SimilarityTextExtractor:
         }
 
 
+class MultiHopGraphExtractor:
+    """Return a three-entity chain that also repeats one normalized name."""
+
+    def extract(self, *, document: StructuredKnowledgeDocument, section: StructuredKnowledgeSection) -> dict[str, Any]:
+        """Model one document root followed by second- and third-level entities."""
+
+        del document, section
+        return {
+            "entities": [
+                {"name": "Alpha", "type": "concept", "confidence": 0.9},
+                {"name": "Beta", "type": "concept", "confidence": 0.9},
+                {"name": "Gamma", "type": "concept", "confidence": 0.9},
+                {"name": " alpha ", "type": "project", "confidence": 0.8},
+            ],
+            "relations": [
+                {"source": "Alpha", "target": "Beta", "type": "contains", "evidence": "Alpha contains Beta", "confidence": 0.9},
+                {"source": "Beta", "target": "Gamma", "type": "contains", "evidence": "Beta contains Gamma", "confidence": 0.9},
+            ],
+        }
+
+
 def _section(section_id: str, content: str) -> StructuredKnowledgeSection:
     """构造批量抽取测试使用的最小章节。"""
 
@@ -336,6 +357,21 @@ def test_graph_llm_config_uses_explicit_small_model_when_present(tmp_path: Path)
     assert llm_config["small_model_name"] == "small-model"
     assert llm_config["small_api_key"] == "small-key"
     assert llm_config["small_base_url"] == "https://small.example.com"
+
+
+def test_graph_prompts_require_entity_multihop_relationships(tmp_path: Path) -> None:
+    """Single and batch extraction prompts must request complete entity relationship chains."""
+
+    config = AgentConfig.load_config(
+        {"storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")}},
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+
+    assert "实体—实体关系" in config.prompts.knowledge_graph_extraction_system_prompt
+    assert "多跳关系链" in config.prompts.knowledge_graph_extraction_system_prompt
+    assert "实体—实体多跳关系链" in config.prompts.knowledge_graph_batch_system_prompt
 
 
 def test_entity_dedup_merges_semantic_duplicates(tmp_path: Path) -> None:
@@ -799,6 +835,74 @@ def test_knowledge_graph_service_infers_explicit_similarity_relation(tmp_path: P
     assert result.relations_written == 1
     assert len(semantic_edges) == 1
     assert semantic_edges[0]["evidence"] == "A像B"
+
+
+def test_knowledge_graph_service_persists_multihop_relations_and_fuses_all_depths(tmp_path: Path) -> None:
+    """A document should attach only graph roots while deeper entities remain linked entity-to-entity."""
+
+    config = AgentConfig.load_config(
+        {"storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")}},
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    service = KnowledgeGraphService(config=config, engine=engine, extractor=MultiHopGraphExtractor())
+    document = StructuredKnowledgeDocument(
+        document_id="doc_chain", source_type="text", source_path=str(tmp_path / "chain.txt"),
+        source_uri=str(tmp_path / "chain.txt"), source_hash="chain-hash", title="chain",
+        summary="", tags=[], authority=0.7, valid_from=None, valid_until=None,
+        metadata={"relative_path": "chain.txt"},
+        sections=[_section("sec_chain", "Alpha contains Beta. Beta contains Gamma.")],
+    )
+
+    service.extract_document(user_id="u1", library_id="lib1", document=document)
+    graph = service.get_graph(user_id="u1", library_id="lib1")
+    entities = {node["label"].strip().lower(): node for node in graph["nodes"] if node["kind"] == "entity"}
+    document_node = next(node for node in graph["nodes"] if node["kind"] == "document")
+    edges = {(edge["source"], edge["target"], edge["kind"]) for edge in graph["links"]}
+
+    assert set(entities) == {"alpha", "beta", "gamma"}
+    assert (document_node["id"], entities["alpha"]["id"], "mentions") in edges
+    assert (document_node["id"], entities["beta"]["id"], "mentions") not in edges
+    assert (document_node["id"], entities["gamma"]["id"], "mentions") not in edges
+    assert (entities["alpha"]["id"], entities["beta"]["id"], "contains") in edges
+    assert (entities["beta"]["id"], entities["gamma"]["id"], "contains") in edges
+
+
+def test_knowledge_graph_service_deletes_entity_and_clears_document_children(tmp_path: Path) -> None:
+    """Direct graph mutations must remove persisted nodes and every incident/source edge."""
+
+    config = AgentConfig.load_config(
+        {"storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")}},
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    service = KnowledgeGraphService(config=config, engine=engine, extractor=MultiHopGraphExtractor())
+    document = StructuredKnowledgeDocument(
+        document_id="doc_mutation", source_type="text", source_path=str(tmp_path / "mutation.txt"),
+        source_uri=str(tmp_path / "mutation.txt"), source_hash="mutation-hash", title="mutation",
+        summary="", tags=[], authority=0.7, valid_from=None, valid_until=None,
+        metadata={"relative_path": "mutation.txt"},
+        sections=[_section("sec_mutation", "Alpha contains Beta. Beta contains Gamma.")],
+    )
+    service.extract_document(user_id="u1", library_id="lib1", document=document)
+    graph = service.get_graph(user_id="u1", library_id="lib1")
+    beta_id = next(node["id"] for node in graph["nodes"] if node["label"] == "Beta")
+    document_id = next(node["id"] for node in graph["nodes"] if node["kind"] == "document")
+
+    deleted = service.delete_entity_node(user_id="u1", library_id="lib1", node_id=beta_id)
+    after_delete = service.get_graph(user_id="u1", library_id="lib1")
+    assert deleted == {"deleted_nodes": 1, "deleted_edges": 2}
+    assert beta_id not in {node["id"] for node in after_delete["nodes"]}
+    assert all(beta_id not in {edge["source"], edge["target"]} for edge in after_delete["links"])
+
+    cleared = service.clear_document_children(user_id="u1", library_id="lib1", node_id=document_id)
+    after_clear = service.get_graph(user_id="u1", library_id="lib1")
+    assert cleared["deleted_edges"] >= 1
+    assert {node["kind"] for node in after_clear["nodes"]} == {"document"}
 
 
 def test_cosine_similarity_identical_vectors() -> None:

@@ -753,6 +753,52 @@ async def get_knowledge_graph(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.delete("/knowledge/graph/nodes/{node_id}")
+async def delete_knowledge_graph_entity(
+    node_id: str,
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+) -> dict[str, Any]:
+    """Delete one entity node and all of its incident graph edges."""
+
+    settings_svc = _require_settings_service()
+    graph_svc = _require_knowledge_graph_service()
+    profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
+    active_library = dict(profile["active_knowledge_library"])
+    try:
+        result = await run_in_threadpool(
+            graph_svc.delete_entity_node,
+            user_id=str(profile["user_id"]),
+            library_id=str(active_library["library_id"]),
+            node_id=node_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True, **result}
+
+
+@router.post("/knowledge/graph/nodes/{node_id}/clear")
+async def clear_knowledge_graph_document(node_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Delete one document's contributed entity graph while retaining the document node."""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    settings_svc = _require_settings_service()
+    graph_svc = _require_knowledge_graph_service()
+    profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
+    active_library = dict(profile["active_knowledge_library"])
+    try:
+        result = await run_in_threadpool(
+            graph_svc.clear_document_children,
+            user_id=str(profile["user_id"]),
+            library_id=str(active_library["library_id"]),
+            node_id=node_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True, **result}
+
+
 from agent_service.services.knowledge_graph import (
     KnowledgeGraphService,
     get_dedup_progress,
@@ -840,6 +886,28 @@ async def get_graph_rebuild_status(
         "result": result_data,
         "docs": docs,
     }
+
+
+@router.post("/knowledge/graph/rebuild/cancel")
+async def cancel_knowledge_graph_rebuild(body: dict[str, Any]) -> dict[str, Any]:
+    """中止当前知识库内一个等待中或运行中的图谱任务。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    target_path = str(body.get("path") or "").replace("\\", "/").strip().strip("/")
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    if ".." in target_path.split("/"):
+        raise HTTPException(status_code=422, detail="path escapes knowledge root")
+    profile = await run_in_threadpool(_require_settings_service().ensure_user_profile, user_id=user_id)
+    active_library = dict(profile["active_knowledge_library"])
+    result = _require_knowledge_graph_queue_service().cancel(
+        user_id=str(profile["user_id"]),
+        library_id=str(active_library["library_id"]),
+        identity=target_path or "__all__",
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="graph task not found")
+    return result
 
 
 @router.post("/knowledge/graph/dedup")

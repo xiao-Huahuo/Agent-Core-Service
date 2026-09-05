@@ -143,6 +143,12 @@ function queueStatusLabel(status: IngestionQueueItem['status']): string {
   return '等待灌库'
 }
 
+function graphQueueStatusLabel(status: IngestionQueueItem['status']): string {
+  if (status === 'running') return '正在抽取'
+  if (status === 'cancelling') return '正在中止'
+  return '等待抽取'
+}
+
 function historyStatusLabel(status: IngestionHistoryItem['status']): string {
   if (status === 'finished') return '已完成'
   if (status === 'skipped') return '已跳过'
@@ -315,6 +321,7 @@ function historySummary(row: IngestionHistoryItem): string {
         <span class="column-kind">类型</span>
         <span class="column-progress">图谱抽取进度</span>
         <span class="column-status">状态</span>
+        <span class="column-action">操作</span>
       </div>
       <TransitionGroup name="ingestion-row" tag="div" class="file-table-body">
         <div
@@ -343,9 +350,18 @@ function historySummary(row: IngestionHistoryItem): string {
             </span>
           </span>
           <span class="status-cell column-status">
-            <IcIcon v-if="row.status === 'running'" name="spinner" :size="14" class="spin" />
+            <IcIcon v-if="row.status === 'running' || row.status === 'cancelling'" name="spinner" :size="14" class="spin" />
             <IcIcon v-else name="radio-unchecked" :size="14" />
-            <span class="status-pill" :class="row.status">{{ row.status === 'running' ? '正在抽取' : '等待抽取' }}</span>
+            <span class="status-pill" :class="row.status">{{ graphQueueStatusLabel(row.status) }}</span>
+          </span>
+          <span class="column-action">
+            <button
+              class="cancel-ingestion-button"
+              type="button"
+              :disabled="row.status === 'cancelling'"
+              :aria-label="`中止 ${row.name} 图谱抽取`"
+              @click="workspaceStore.cancelGraphTask(row)"
+            >中止图谱</button>
           </span>
         </div>
       </TransitionGroup>
@@ -659,7 +675,7 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .graph-queue-table .file-table-head,
 .graph-queue-table .file-row {
-  grid-template-columns: minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px minmax(240px, 1.5fr) 132px;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px minmax(240px, 1.5fr) 132px 96px;
 }
 
 .history-table .file-table-head,
@@ -938,7 +954,7 @@ function historySummary(row: IngestionHistoryItem): string {
 
   .graph-queue-table .file-table-head,
   .graph-queue-table .file-row {
-    grid-template-columns: minmax(160px, 1.1fr) minmax(220px, 1.6fr) minmax(190px, 1.25fr) 120px;
+    grid-template-columns: minmax(160px, 1.1fr) minmax(220px, 1.6fr) minmax(190px, 1.25fr) 120px 86px;
   }
 
   .history-table .file-table-head,
@@ -987,7 +1003,7 @@ function historySummary(row: IngestionHistoryItem): string {
 
   .graph-queue-table .file-table-head,
   .graph-queue-table .file-row {
-    grid-template-columns: minmax(0, 1.3fr) minmax(130px, 1fr) 104px;
+    grid-template-columns: minmax(0, 1.3fr) minmax(130px, 1fr) 104px 76px;
   }
 
   .history-table .file-table-head,
@@ -1043,7 +1059,7 @@ function historySummary(row: IngestionHistoryItem): string {
 
   .graph-queue-table .file-table-head,
   .graph-queue-table .file-row {
-    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.9fr);
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.9fr) 58px;
   }
 
   .queue-table .column-status,

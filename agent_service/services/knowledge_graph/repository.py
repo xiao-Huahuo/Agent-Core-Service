@@ -17,6 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 import numpy as np
 from sklearn.cluster import DBSCAN
 from sqlalchemy.engine import Engine
+from sqlalchemy import or_
 from sqlmodel import Session, select
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.core.db.engine import get_database_engine
@@ -44,6 +45,51 @@ from agent_service.services.knowledge_graph.service import (
 )
 
 class KnowledgeGraphRepositoryMixin:
+    def delete_entity_node(self, *, user_id: str, library_id: str, node_id: str) -> dict[str, int]:
+        """Delete one owned entity node together with every incident edge."""
+
+        with Session(self.engine) as db:
+            node = db.get(KnowledgeGraphNode, node_id)
+            if not node or node.user_id != user_id or node.library_id != library_id or node.node_type != "entity":
+                raise ValueError("entity node not found")
+            edges = list(db.exec(
+                select(KnowledgeGraphEdge)
+                .where(KnowledgeGraphEdge.user_id == user_id)
+                .where(KnowledgeGraphEdge.library_id == library_id)
+                .where(or_(
+                    KnowledgeGraphEdge.source_node_id == node_id,
+                    KnowledgeGraphEdge.target_node_id == node_id,
+                ))
+            ).all())
+            for edge in edges:
+                db.delete(edge)
+            db.delete(node)
+            db.commit()
+            return {"deleted_nodes": 1, "deleted_edges": len(edges)}
+
+    def clear_document_children(self, *, user_id: str, library_id: str, node_id: str) -> dict[str, int]:
+        """Clear one document's contributed graph while preserving the document node."""
+
+        with Session(self.engine) as db:
+            node = db.get(KnowledgeGraphNode, node_id)
+            if not node or node.user_id != user_id or node.library_id != library_id or node.node_type != "document":
+                raise ValueError("document node not found")
+            edges = list(db.exec(
+                select(KnowledgeGraphEdge)
+                .where(KnowledgeGraphEdge.user_id == user_id)
+                .where(KnowledgeGraphEdge.library_id == library_id)
+                .where(or_(
+                    KnowledgeGraphEdge.source_document_id == node.document_id,
+                    KnowledgeGraphEdge.source_node_id == node_id,
+                ))
+            ).all())
+            for edge in edges:
+                db.delete(edge)
+            db.flush()
+            deleted_nodes = self._delete_orphan_entity_nodes(db=db, user_id=user_id, library_id=library_id)
+            db.commit()
+            return {"deleted_nodes": deleted_nodes, "deleted_edges": len(edges)}
+
     def delete_document_graph(self, *, user_id: str, library_id: str, document_id: str) -> int:
         """删除单文档来源的图谱点边和状态。"""
 
@@ -112,7 +158,7 @@ class KnowledgeGraphRepositoryMixin:
                 )
         return deleted
     @staticmethod
-    def _delete_orphan_entity_nodes(*, db: Session, user_id: str, library_id: str) -> None:
+    def _delete_orphan_entity_nodes(*, db: Session, user_id: str, library_id: str) -> int:
         """删除没有任何入边或出边的实体节点。"""
 
         edges = db.exec(
@@ -121,6 +167,7 @@ class KnowledgeGraphRepositoryMixin:
             .where(KnowledgeGraphEdge.library_id == library_id)
         ).all()
         linked_node_ids = {edge.source_node_id for edge in edges} | {edge.target_node_id for edge in edges}
+        deleted = 0
         for node in db.exec(
             select(KnowledgeGraphNode)
             .where(KnowledgeGraphNode.user_id == user_id)
@@ -129,6 +176,8 @@ class KnowledgeGraphRepositoryMixin:
         ).all():
             if node.node_id not in linked_node_ids:
                 db.delete(node)
+                deleted += 1
+        return deleted
     def _write_graph(
         self,
         *,
@@ -144,6 +193,14 @@ class KnowledgeGraphRepositoryMixin:
         document_node_id = self._document_node_id(user_id=user_id, library_id=library_id, document_id=document.document_id)
         entity_node_ids: dict[str, str] = {}
         written_entity_node_ids: set[str] = set()
+        relation_targets = {self._normalize_label(relation.target) for relation, _section in relations}
+        document_entity_roots = {
+            self._normalize_label(entity.name)
+            for entity in entities
+            if self._normalize_label(entity.name) not in relation_targets
+        }
+        if not document_entity_roots and entities:
+            document_entity_roots.add(self._normalize_label(entities[0].name))
         with Session(self.engine) as db:
             db.merge(self._build_document_node(user_id=user_id, library_id=library_id, document=document, now=now))
             for entity in entities:
@@ -176,8 +233,8 @@ class KnowledgeGraphRepositoryMixin:
                         updated_at=now,
                     )
                 )
-                db.merge(
-                    KnowledgeGraphEdge(
+                if self._normalize_label(entity.name) in document_entity_roots:
+                    db.merge(KnowledgeGraphEdge(
                         edge_id=self._edge_id(
                             user_id,
                             library_id,
@@ -199,8 +256,7 @@ class KnowledgeGraphRepositoryMixin:
                         metadata_json={"edge_role": "document_entity"},
                         created_at=now,
                         updated_at=now,
-                    )
-                )
+                    ))
             written_relations = 0
             for relation, section in relations:
                 source_id = entity_node_ids.get(relation.source) or entity_node_ids.get(self._normalize_label(relation.source))
