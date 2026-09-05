@@ -13,7 +13,9 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlmodel import Session
 
+from agent_service.models.library import LibraryAsset
 from agent_service.services.component_library.service import COMPONENT_TAGS, ComponentLibraryService
 from agent_service.services.knowledge_library import KnowledgeIgnoreMatcher
 
@@ -44,6 +46,21 @@ def _service(tmp_path: Path) -> ComponentLibraryService:
     return ComponentLibraryService(settings_service=_SettingsStub(tmp_path))
 
 
+def _metadata_engine(tmp_path: Path):
+    """Create the production-shaped tables needed by drawing-script metadata tests."""
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'component-metadata.db'}")
+    LibraryAsset.__table__.create(engine)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE component_library_metadata ("
+            "metadata_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, library_id TEXT NOT NULL, "
+            "component_id TEXT NOT NULL, script_language TEXT NOT NULL, cover_asset_id TEXT NOT NULL, "
+            "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"
+        ))
+    return engine
+
+
 def test_components_are_read_only_from_active_knowledge_components_directory(tmp_path: Path) -> None:
     """Unrelated supercomponents files must not appear in the user component library."""
 
@@ -72,6 +89,58 @@ def test_uploaded_component_is_a_utf8_file_and_survives_service_instances(tmp_pa
     assert filtered["components"] == [created["component"]]
 
 
+def test_drawing_script_persists_language_optional_cover_and_never_requires_component_markup(tmp_path: Path) -> None:
+    """Drawing scripts retain raw code and metadata while an omitted cover stays valid."""
+
+    engine = _metadata_engine(tmp_path)
+    with Session(engine) as db:
+        db.add(LibraryAsset(
+            asset_id="asset-plot",
+            user_id="u1",
+            library_id="test-library",
+            asset_type="cover",
+            mime_type="image/png",
+            file_name="plot.png",
+            storage_path=str(tmp_path / "asset-plot.png"),
+            width=640,
+            height=360,
+            size=128,
+        ))
+        db.commit()
+    service = ComponentLibraryService(settings_service=_SettingsStub(tmp_path), legacy_engine=engine)
+    source = "import matplotlib.pyplot as plt\nplt.plot([1, 2], [3, 5])"
+
+    covered = service.create_component(
+        user_id="u1", source=source, tag="drawing scripts", filename="sales-chart.script",
+        script_language="Python", cover_asset_id="asset-plot",
+    )
+    uncovered = service.create_component(
+        user_id="u1", source="plot(cars)", tag="drawing scripts", filename="cars.script",
+        script_language="R",
+    )
+
+    assert (tmp_path / ".mw" / "components" / "drawing scripts" / "sales-chart.script").read_text(encoding="utf-8") == source
+    assert covered["component"]["source_format"] == "script"
+    assert covered["component"]["script_language"] == "Python"
+    assert covered["component"]["cover_asset"]["url"] == "/library/assets/u1/asset-plot.png"
+    assert uncovered["component"]["cover_asset"] is None
+    listed = ComponentLibraryService(
+        settings_service=_SettingsStub(tmp_path), legacy_engine=engine,
+    ).list_components(user_id="u1", tag="drawing scripts")
+    assert {item["script_language"] for item in listed["components"]} == {"Python", "R"}
+    assert service.validate_component(
+        user_id="u1", component_id=str(covered["component"]["component_id"]),
+    )["valid"] is True
+    renamed = service.rename_component(
+        user_id="u1",
+        component_id=str(covered["component"]["component_id"]),
+        title="renamed-chart",
+    )
+    assert renamed["component"]["component_id"] == "drawing scripts/renamed-chart.script"
+    assert renamed["component"]["script_language"] == "Python"
+    assert renamed["component"]["cover_asset_id"] == "asset-plot"
+
+
 def test_upload_uses_safe_unique_names_and_supported_extensions(tmp_path: Path) -> None:
     """File names may not escape components and collisions must not overwrite source."""
 
@@ -88,6 +157,8 @@ def test_upload_uses_safe_unique_names_and_supported_extensions(tmp_path: Path) 
         service.create_component(user_id="u1", source="x", tag="buttons", filename="component.js")
     with pytest.raises(ValueError, match="file name"):
         service.create_component(user_id="u1", source="x", tag="buttons", filename="../escape.vue")
+    with pytest.raises(ValueError, match="reserved for drawing scripts"):
+        service.create_component(user_id="u1", source="x", tag="buttons", filename="hidden.script")
 
 
 def test_component_rename_moves_the_source_file_and_updates_the_visible_title(tmp_path: Path) -> None:

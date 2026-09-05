@@ -85,6 +85,7 @@ const tagIcons: Record<ComponentTag, string> = {
   forms: 'fact-check',
   patterns: 'layers',
   tooltips: 'info',
+  'drawing scripts': 'palette',
   any: 'book',
 }
 
@@ -216,7 +217,8 @@ async function deleteComponent(item: ComponentLibraryItem): Promise<void> {
 
 /** Render the all-filter with the user-facing label requested for the sidebar. */
 function tagLabel(tag: ComponentTag): string {
-  return tag === 'any' ? 'all' : tag
+  if (tag === 'any') return 'all'
+  return tag === 'drawing scripts' ? '绘图脚本' : tag
 }
 
 watch(activeTag, () => {

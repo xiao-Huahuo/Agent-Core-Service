@@ -90,7 +90,9 @@ describe('ComponentLibraryView', () => {
 
     expect(wrapper.findAll('.tag-option').map((item) => item.text())).toEqual([
       'all',
-      ...COMPONENT_TAGS.filter((tag) => tag !== 'any'),
+      ...COMPONENT_TAGS.filter((tag) => tag !== 'any').map((tag) => (
+        tag === 'drawing scripts' ? '绘图脚本' : tag
+      )),
     ])
     expect(wrapper.find('.card-stub').text()).toBe('buttons')
     expect(listComponentLibraryItems).toHaveBeenCalledWith('u1', 'any')
@@ -338,7 +340,7 @@ describe('ComponentLibraryView', () => {
           ComponentPreview: { template: '<div class="preview-stub" />' },
           LibraryTagPicker: {
             name: 'LibraryTagPicker',
-            props: ['single', 'allowCustom', 'dropdownAlignOffset'],
+            props: ['availableTags', 'single', 'allowCustom', 'dropdownAlignOffset', 'dropdownZIndex'],
             template: '<div class="tag-picker-stub" />',
           },
         },
@@ -360,6 +362,7 @@ describe('ComponentLibraryView', () => {
       single: true,
       allowCustom: false,
       dropdownAlignOffset: 24,
+      dropdownZIndex: 1200,
     })
     expect(wrapper.find('.upload-backdrop').exists()).toBe(true)
     expect(wrapper.get('.upload-form').attributes('aria-modal')).toBe('true')
@@ -367,7 +370,121 @@ describe('ComponentLibraryView', () => {
     expect(wrapper.get('.preview-placeholder').text()).toBe('')
     expect(wrapper.get('.file-picker-button').text()).toBe('')
     expect(wrapper.findComponent(CompactCodeInput).exists()).toBe(true)
-    expect(componentUploadFormSource).toMatch(/\.name-field input\s*\{[^}]*padding:\s*0 var\(--space-20\)/su)
+    expect(componentUploadFormSource).toMatch(
+      /\.name-field input\s*\{[^}]*padding:\s*0 var\(--space-20\)/su,
+    )
+  })
+
+  it('switches to the drawing form only when the shared tag dropdown selects 绘图脚本', async () => {
+    createComponentLibraryItem.mockResolvedValue({
+      component: {
+        component_id: 'drawing scripts/chart.script',
+        title: '销售曲线',
+        tag: 'drawing scripts',
+        source_format: 'script',
+        source: 'plt.plot([1, 2])',
+        script_language: 'Python',
+        cover_asset_id: '',
+        cover_asset: null,
+      },
+    })
+    const wrapper = mount(ComponentUploadForm, {
+      props: { userId: 'u1' },
+      global: {
+        stubs: {
+          Teleport: true,
+          ComponentPreview: { name: 'ComponentPreview', template: '<div class="preview-stub" />' },
+          LibraryCoverUploader: {
+            name: 'LibraryCoverUploader',
+            template: '<button class="cover-uploader-stub" />',
+          },
+          LibraryTagPicker: {
+            name: 'LibraryTagPicker',
+            props: ['modelValue', 'availableTags', 'allowCustom', 'placeholder', 'dropdownZIndex'],
+            emits: ['update:modelValue'],
+            template: `<button
+              :class="placeholder === '选择一个标签' ? 'choose-drawing-tag' : 'choose-script-language'"
+              @click="$emit('update:modelValue', [placeholder === '选择一个标签' ? '绘图脚本' : 'Python'])"
+            />`,
+          },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+
+    const tagPicker = wrapper.getComponent({ name: 'LibraryTagPicker' })
+    expect(tagPicker.props('availableTags')).toContain('绘图脚本')
+    expect(tagPicker.props('dropdownZIndex')).toBe(1200)
+    expect(wrapper.find('.drawing-script-toggle').exists()).toBe(false)
+    await wrapper.get('.choose-drawing-tag').trigger('click')
+    expect(wrapper.findComponent({ name: 'ComponentPreview' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'LibraryCoverUploader' }).exists()).toBe(true)
+    expect(wrapper.get('.script-language-field').element.previousElementSibling).toBe(
+      wrapper.get('.name-field').element,
+    )
+    const pickers = wrapper.findAllComponents({ name: 'LibraryTagPicker' })
+    expect(pickers).toHaveLength(2)
+    const languagePicker = pickers.find((picker) => picker.props('placeholder') === '输入或选择脚本语言')
+    expect(languagePicker?.props()).toMatchObject({
+      allowCustom: true,
+      dropdownZIndex: 1200,
+    })
+    expect(languagePicker?.props('availableTags')).toContain('Python')
+
+    await wrapper.get('input[name="component-name"]').setValue('销售曲线')
+    await wrapper.get('.choose-script-language').trigger('click')
+    await wrapper.get('textarea').setValue('plt.plot([1, 2])')
+    await wrapper.get('.primary-button').trigger('click')
+    await flushPromises()
+
+    expect(createComponentLibraryItem).toHaveBeenCalledWith({
+      user_id: 'u1',
+      source: 'plt.plot([1, 2])',
+      tag: 'drawing scripts',
+      filename: '销售曲线.script',
+      script_language: 'Python',
+      cover_asset_id: '',
+    })
+    expect(wrapper.emitted('created')).toHaveLength(1)
+  })
+
+  it('forwards an uploaded drawing image asset with the script request', async () => {
+    createComponentLibraryItem.mockResolvedValue({ component: { component_id: 'drawing scripts/chart.script' } })
+    const wrapper = mount(ComponentUploadForm, {
+      props: { userId: 'u1' },
+      global: {
+        stubs: {
+          Teleport: true,
+          LibraryCoverUploader: {
+            name: 'LibraryCoverUploader',
+            template: '<button class="cover-uploader-stub" @click="$emit(\'uploaded\', { asset_id: \'asset-plot\', url: \'/cover.png\' })" />',
+          },
+          LibraryTagPicker: {
+            name: 'LibraryTagPicker',
+            props: ['placeholder'],
+            emits: ['update:modelValue'],
+            template: `<button
+              :class="placeholder === '选择一个标签' ? 'choose-drawing-tag' : 'choose-script-language'"
+              @click="$emit('update:modelValue', [placeholder === '选择一个标签' ? '绘图脚本' : 'R'])"
+            />`,
+          },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+
+    await wrapper.get('.choose-drawing-tag').trigger('click')
+    await wrapper.get('.cover-uploader-stub').trigger('click')
+    await wrapper.get('input[name="component-name"]').setValue('带封面曲线')
+    await wrapper.get('.choose-script-language').trigger('click')
+    await wrapper.get('textarea').setValue('plot(cars)')
+    await wrapper.get('.primary-button').trigger('click')
+    await flushPromises()
+
+    expect(createComponentLibraryItem).toHaveBeenCalledWith(expect.objectContaining({
+      cover_asset_id: 'asset-plot',
+      script_language: 'R',
+    }))
   })
 
   it('confirms and deletes a card through the component-library endpoint', async () => {

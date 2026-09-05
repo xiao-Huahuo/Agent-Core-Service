@@ -26,6 +26,18 @@ const item: ComponentLibraryItem = {
   updated_at: null,
 }
 
+const drawingScriptItem = {
+  ...item,
+  component_id: 'drawing scripts/chart.script',
+  title: '销售曲线',
+  tag: 'drawing scripts',
+  source_format: 'script',
+  source: 'plt.plot([1, 2])',
+  script_language: 'Python',
+  cover_asset_id: '',
+  cover_asset: null,
+} as ComponentLibraryItem
+
 describe('ComponentLibraryCard', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -163,5 +175,40 @@ describe('ComponentLibraryCard', () => {
     expect(componentNameEditorSource).toMatch(
       /\.component-name-input\s*\{[^}]*border:\s*0;[^}]*outline:\s*0;[^}]*box-shadow:\s*none;/su,
     )
+  })
+
+  it('renders a drawing script as a text cover with tag and language capsules without mounting a preview', () => {
+    const wrapper = mount(ComponentLibraryCard, {
+      props: { item: drawingScriptItem },
+      global: {
+        stubs: {
+          ComponentPreview: { name: 'ComponentPreview', template: '<div class="preview-stub" />' },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+
+    expect(wrapper.findComponent({ name: 'ComponentPreview' }).exists()).toBe(false)
+    expect(wrapper.get('.drawing-title-cover').text()).toBe('销售曲线')
+    expect(wrapper.findAll('.component-capsules span').map((pill) => pill.text())).toEqual([
+      '绘图脚本',
+      'Python',
+    ])
+  })
+
+  it('uses the persisted drawing image instead of the text cover when one was uploaded', () => {
+    const wrapper = mount(ComponentLibraryCard, {
+      props: {
+        item: {
+          ...drawingScriptItem,
+          cover_asset_id: 'asset-1',
+          cover_asset: { asset_id: 'asset-1', url: '/cover.png' },
+        } as ComponentLibraryItem,
+      },
+      global: { stubs: { IcIcon: { template: '<span />' } } },
+    })
+
+    expect(wrapper.get('.drawing-cover-image').attributes('src')).toBe('/cover.png')
+    expect(wrapper.find('.drawing-title-cover').exists()).toBe(false)
   })
 })

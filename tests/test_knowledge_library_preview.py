@@ -142,6 +142,30 @@ def test_file_tree_shows_managed_mw_directory_without_indexing_it(tmp_path: Path
     assert nodes[0]["children"][0]["name"] == "library"
 
 
+def test_file_tree_hides_git_metadata_directory(tmp_path: Path) -> None:
+    """文件树不得向前端暴露 Git 内部对象和引用目录。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    (knowledge_dir / ".git" / "objects").mkdir(parents=True)
+    (knowledge_dir / ".git" / "objects" / "object-id").write_text("git metadata", encoding="utf-8")
+    (knowledge_dir / "project" / ".git" / "refs").mkdir(parents=True)
+    (knowledge_dir / "project" / ".git" / "refs" / "main").write_text("commit-id", encoding="utf-8")
+    (knowledge_dir / "project" / "README.md").write_text("# project", encoding="utf-8")
+    (knowledge_dir / "visible.md").write_text("# visible", encoding="utf-8")
+    service = _service(tmp_path, knowledge_dir)
+    service.memory_service = SimpleNamespace(
+        list_source_ids=lambda **kwargs: set(),
+        list_source_updated_at=lambda **kwargs: {},
+    )
+
+    nodes = service.list_files(user_id="user-1")
+
+    assert ".git" not in {node["name"] for node in nodes}
+    assert "visible.md" in {node["name"] for node in nodes}
+    project = next(node for node in nodes if node["name"] == "project")
+    assert [child["name"] for child in project["children"]] == ["README.md"]
+
+
 def test_preview_image_uses_existing_ocr_frontmatter_text(tmp_path: Path) -> None:
     """图片已灌库产生 OCR sections 后,预览 payload 才暴露 edit/split 可显示文本。"""
 

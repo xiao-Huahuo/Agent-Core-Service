@@ -82,4 +82,31 @@ describe('ComponentLibraryDetail', () => {
     expect(wrapper.emitted('save')).toEqual([['<template>changed</template>']])
     expect(wrapper.get('.detail-workbench').classes()).toContain('compact')
   })
+
+  it('shows a drawing cover and raw language source without mounting the preview compiler', () => {
+    const drawingItem = {
+      ...item,
+      component_id: 'drawing scripts/chart.script',
+      title: '销售曲线',
+      tag: 'drawing scripts',
+      source_format: 'script',
+      source: 'plt.plot([1, 2])',
+      script_language: 'Python',
+    } as ComponentLibraryItem
+    const wrapper = mount(ComponentLibraryDetail, {
+      props: { item: drawingItem },
+      global: {
+        stubs: {
+          ComponentPreview: { name: 'ComponentPreview', template: '<div />' },
+          DrawingScriptCover: { name: 'DrawingScriptCover', template: '<div class="drawing-cover-stub" />' },
+          CodePreview: { name: 'CodePreview', props: ['language'], template: '<div />' },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+
+    expect(wrapper.findComponent({ name: 'ComponentPreview' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'DrawingScriptCover' }).exists()).toBe(true)
+    expect(wrapper.getComponent({ name: 'CodePreview' }).props('language')).toBe('Python')
+  })
 })

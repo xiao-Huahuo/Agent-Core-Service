@@ -138,6 +138,7 @@ class KnowledgeFileTreeMixin:
                 ocr_enabled=ocr_enabled,
             )
             for path in sorted(root.iterdir(), key=self._sort_path)
+            if path.name != ".git"
         ]
     def get_active_root_path(self, *, user_id: str) -> Path:
         """
@@ -518,6 +519,7 @@ class KnowledgeFileTreeMixin:
                     ocr_enabled=ocr_enabled,
                 )
                 for child in sorted(path.iterdir(), key=self._sort_path)
+                if child.name != ".git"
             ]
             child_ingested_at = [
                 str(child.get("ingestedAt") or "")

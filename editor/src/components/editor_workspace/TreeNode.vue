@@ -237,27 +237,29 @@ function handleRowDrop(event: DragEvent) {
 
       <div class="tree-children-wrapper">
         <ul class="tree-children">
-          <TreeNode
-            v-for="child in node.children"
-            :key="child.path"
-            :node="child"
-            :depth="depth + 1"
-            :expanded-paths="expandedPaths"
-            :selected-path="selectedPath"
-            :selected-paths="selectedPaths"
-            :dirty-paths="dirtyPaths"
-            :editing-path="editingPath"
-            :editing-value="editingValue"
-            @select="(targetNode, event) => emit('select', targetNode, event)"
-            @drop-files="(targetNode, files) => emit('dropFiles', targetNode, files)"
-            @drop-nodes="(targetNode, paths) => emit('dropNodes', targetNode, paths)"
-            @node-drag-start="(targetNode, event) => emit('nodeDragStart', targetNode, event)"
-            @context-menu="(targetNode, event) => emit('contextMenu', targetNode, event)"
-            @ingest="(targetNode) => emit('ingest', targetNode)"
-            @edit-input="emit('editInput', $event)"
-            @edit-commit="emit('editCommit', $event)"
-            @edit-cancel="emit('editCancel')"
-          />
+          <template v-if="isExpanded">
+            <TreeNode
+              v-for="child in node.children"
+              :key="child.path"
+              :node="child"
+              :depth="depth + 1"
+              :expanded-paths="expandedPaths"
+              :selected-path="selectedPath"
+              :selected-paths="selectedPaths"
+              :dirty-paths="dirtyPaths"
+              :editing-path="editingPath"
+              :editing-value="editingValue"
+              @select="(targetNode, event) => emit('select', targetNode, event)"
+              @drop-files="(targetNode, files) => emit('dropFiles', targetNode, files)"
+              @drop-nodes="(targetNode, paths) => emit('dropNodes', targetNode, paths)"
+              @node-drag-start="(targetNode, event) => emit('nodeDragStart', targetNode, event)"
+              @context-menu="(targetNode, event) => emit('contextMenu', targetNode, event)"
+              @ingest="(targetNode) => emit('ingest', targetNode)"
+              @edit-input="emit('editInput', $event)"
+              @edit-commit="emit('editCommit', $event)"
+              @edit-cancel="emit('editCancel')"
+            />
+          </template>
         </ul>
       </div>
     </template>

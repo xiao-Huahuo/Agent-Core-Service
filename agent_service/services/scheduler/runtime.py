@@ -12,19 +12,22 @@ LLM 调度器运行时辅助 mixin。
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import random
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from contextlib import contextmanager
 from typing import Any
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from agent_service.services.scheduler.types import (
@@ -41,6 +44,133 @@ from agent_service.services.scheduler.types import (
     ScheduledLLMTask,
 )
 from agent_service.core.context_budget import ModelCapacity
+
+
+_DSML_TOOL_BLOCK_RE = re.compile(
+    r"<[|｜]{1,2}DSML[|｜]{1,2}(?:tool_calls|function_calls)>"
+    r"(?P<body>.*?)"
+    r"</[|｜]{1,2}DSML[|｜]{1,2}(?:tool_calls|function_calls)>",
+    re.DOTALL,
+)
+_DSML_INVOKE_RE = re.compile(
+    r'<[|｜]{1,2}DSML[|｜]{1,2}invoke\s+name="(?P<name>[^"]+)"\s*>'
+    r"(?P<body>.*?)"
+    r"</[|｜]{1,2}DSML[|｜]{1,2}invoke>",
+    re.DOTALL,
+)
+_DSML_PARAMETER_RE = re.compile(
+    r'<[|｜]{1,2}DSML[|｜]{1,2}parameter\s+name="(?P<name>[^"]+)"'
+    r'\s+string="(?P<string>true|false)"\s*>'
+    r"(?P<value>.*?)"
+    r"</[|｜]{1,2}DSML[|｜]{1,2}parameter>",
+    re.DOTALL,
+)
+_DSML_TOOL_OPEN_MARKERS = (
+    "<｜DSML｜tool_calls>",
+    "<｜｜DSML｜｜tool_calls>",
+    "<|DSML|tool_calls>",
+    "<||DSML||tool_calls>",
+    "<｜DSML｜function_calls>",
+    "<｜｜DSML｜｜function_calls>",
+    "<|DSML|function_calls>",
+    "<||DSML||function_calls>",
+)
+
+
+def recover_deepseek_dsml_tool_calls(
+    message: BaseMessage,
+    *,
+    allowed_tool_names: list[str],
+) -> BaseMessage:
+    """把 DeepSeek 正文中的完整 DSML 块恢复为 LangChain 工具调用。"""
+
+    content = getattr(message, "content", "")
+    if not isinstance(message, AIMessage) or not isinstance(content, str) or message.tool_calls:
+        return message
+    allowed_names = set(allowed_tool_names)
+    recovered_calls: list[dict[str, Any]] = []
+    matched_dsml = False
+
+    def replace_block(match: re.Match[str]) -> str:
+        """解析一个完整工具块，并从最终用户可见正文中移除。"""
+
+        nonlocal matched_dsml
+        matched_dsml = True
+        for invoke in _DSML_INVOKE_RE.finditer(match.group("body")):
+            name = invoke.group("name")
+            if name not in allowed_names:
+                continue
+            arguments: dict[str, Any] = {}
+            valid = True
+            parameters = list(_DSML_PARAMETER_RE.finditer(invoke.group("body")))
+            if parameters:
+                for parameter in parameters:
+                    value: Any = parameter.group("value")
+                    if parameter.group("string") == "false":
+                        try:
+                            value = json.loads(value)
+                        except json.JSONDecodeError:
+                            valid = False
+                            break
+                    arguments[parameter.group("name")] = value
+            else:
+                direct_arguments = invoke.group("body").strip()
+                if direct_arguments:
+                    try:
+                        decoded_arguments = json.loads(direct_arguments)
+                    except json.JSONDecodeError:
+                        valid = False
+                    else:
+                        if isinstance(decoded_arguments, dict):
+                            arguments = decoded_arguments
+                        else:
+                            valid = False
+            if valid:
+                recovered_calls.append({
+                    "name": name,
+                    "args": arguments,
+                    "id": f"call_{uuid4().hex}",
+                    "type": "tool_call",
+                })
+        return ""
+
+    visible_content = _DSML_TOOL_BLOCK_RE.sub(replace_block, content)
+    if not matched_dsml:
+        return message
+    return message.model_copy(update={"content": visible_content, "tool_calls": recovered_calls})
+
+
+def filter_deepseek_dsml_stream_delta(
+    buffered_text: str,
+    content_delta: str,
+    *,
+    suppressing: bool,
+) -> tuple[str, str, bool]:
+    """流式隐藏 DSML；保留可能被拆分的起始标记前缀等待下一 chunk。"""
+
+    if suppressing:
+        return "", "", True
+    pending = buffered_text + content_delta
+    marker_indexes = [
+        index
+        for marker in _DSML_TOOL_OPEN_MARKERS
+        if (index := pending.find(marker)) >= 0
+    ]
+    if marker_indexes:
+        first_marker = min(marker_indexes)
+        return pending[:first_marker], "", True
+    retained_length = max(
+        (
+            length
+            for marker in _DSML_TOOL_OPEN_MARKERS
+            for length in range(1, min(len(marker), len(pending)) + 1)
+            if pending.endswith(marker[:length])
+        ),
+        default=0,
+    )
+    if retained_length:
+        return pending[:-retained_length], pending[-retained_length:], False
+    return pending, "", False
 
 
 class DeepSeekChatOpenAI(ChatOpenAI):

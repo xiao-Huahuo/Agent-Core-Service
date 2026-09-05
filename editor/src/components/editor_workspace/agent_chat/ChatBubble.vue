@@ -664,7 +664,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 .bubble.user {
   border: none;
-  background: color-mix(in srgb, var(--color-primary) 85%, transparent);
+  background: color-mix(in srgb, var(--color-text) 18%, var(--color-surface));
   box-shadow: none;
 }
 
@@ -675,7 +675,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 }
 
 .bubble.user .content {
-  color: #fff;
+  color: var(--color-text);
 }
 
 /* Solid theme-color bubble keeps markdown text readable inside. */

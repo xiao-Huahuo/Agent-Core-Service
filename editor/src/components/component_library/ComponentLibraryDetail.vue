@@ -10,6 +10,7 @@ import { ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import ComponentPreview from '@/components/component_library/ComponentPreview.vue'
+import DrawingScriptCover from '@/components/component_library/DrawingScriptCover.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import type { ComponentLibraryItem } from '@/types/componentLibrary'
@@ -53,16 +54,17 @@ async function copySource(): Promise<void> {
     <section class="detail-preview-panel">
       <header class="panel-header">
         <span class="panel-label"><IcIcon name="visibility" :size="15" />实时预览</span>
-        <span class="tag-pill">{{ item.tag }}</span>
+        <span class="tag-pill">{{ item.source_format === 'script' ? '绘图脚本' : item.tag }}</span>
       </header>
       <div class="detail-preview-surface">
-        <ComponentPreview :source="editable ? sourceDraft : item.source" :source-format="item.source_format" :label="item.title" />
+        <DrawingScriptCover v-if="item.source_format === 'script'" :item="item" />
+        <ComponentPreview v-else :source="editable ? sourceDraft : item.source" :source-format="item.source_format" :label="item.title" />
       </div>
     </section>
 
     <section class="detail-code-panel">
       <header class="panel-header">
-        <span class="panel-label"><IcIcon name="code" :size="16" />{{ item.source_format.toUpperCase() }}</span>
+        <span class="panel-label"><IcIcon name="code" :size="16" />{{ item.script_language || item.source_format.toUpperCase() }}</span>
         <div class="panel-actions">
           <button
             class="detail-copy-button"
@@ -96,8 +98,8 @@ async function copySource(): Promise<void> {
           </button>
         </div>
       </header>
-      <CodeEditor v-if="editable" v-model="sourceDraft" :language="item.source_format" @save="emit('save', sourceDraft)" />
-      <CodePreview v-else :content="item.source" :language="item.source_format" />
+      <CodeEditor v-if="editable" v-model="sourceDraft" :language="item.script_language || item.source_format" @save="emit('save', sourceDraft)" />
+      <CodePreview v-else :content="item.source" :language="item.script_language || item.source_format" />
     </section>
   </section>
 </template>

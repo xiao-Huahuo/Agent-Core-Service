@@ -43,6 +43,10 @@ const isPinnedToBottom = ref(true)
 const isThinkingActive = computed(() => Boolean(props.isStreaming))
 const undoingSnapshotId = ref('')
 let scrollRafId = 0
+let layoutScrollRafId = 0
+let layoutScrollTimeoutId = 0
+let followsSubmittedPrompt = false
+let userScrollRevision = 0
 
 function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
   return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
@@ -112,6 +116,11 @@ function handleScroll() {
   })
 }
 
+function handleUserScrollIntent() {
+  followsSubmittedPrompt = false
+  userScrollRevision += 1
+}
+
 function scheduleScrollIfNeeded() {
   const shouldAutoScroll = isPinnedToBottom.value || isNearBottom()
   void nextTick(() => {
@@ -120,6 +129,28 @@ function scheduleScrollIfNeeded() {
       setPinnedToBottom(true)
     }
   })
+}
+
+/** Keeps the bottom pinned across Vue updates and delayed Markdown/card layout. */
+function schedulePinnedScroll(onSettled?: () => void) {
+  const scheduledRevision = userScrollRevision
+  void nextTick(() => {
+    if (layoutScrollRafId !== 0) window.cancelAnimationFrame(layoutScrollRafId)
+    layoutScrollRafId = window.requestAnimationFrame(() => {
+      layoutScrollRafId = 0
+      if (scheduledRevision !== userScrollRevision) return
+      scrollToBottom()
+      setPinnedToBottom(true)
+    })
+  })
+  if (layoutScrollTimeoutId !== 0) window.clearTimeout(layoutScrollTimeoutId)
+  layoutScrollTimeoutId = window.setTimeout(() => {
+    layoutScrollTimeoutId = 0
+    if (scheduledRevision !== userScrollRevision) return
+    scrollToBottom()
+    setPinnedToBottom(true)
+    onSettled?.()
+  }, 100)
 }
 
 function getLastMessageContent() {
@@ -318,11 +349,12 @@ async function undoMessageChange(message: AgentChatMessage) {
 }
 
 watch(() => props.messages.length, (newLen, oldLen) => {
-  // 新提交 prompt（新增用户消息）时强制滚动到底部
-  if (newLen > oldLen && oldLen > 0 && props.messages[newLen - 1]?.role === 'user') {
-    void nextTick(() => {
-      scrollToBottom()
-      setPinnedToBottom(true)
+  const lastRole = props.messages[newLen - 1]?.role
+  if (newLen > oldLen && lastRole === 'user') followsSubmittedPrompt = true
+  // A submitted prompt must stay visible after the composer changes the viewport.
+  if (newLen > oldLen && (lastRole === 'user' || (lastRole === 'assistant' && followsSubmittedPrompt))) {
+    schedulePinnedScroll(() => {
+      if (lastRole === 'assistant') followsSubmittedPrompt = false
     })
     return
   }
@@ -330,6 +362,13 @@ watch(() => props.messages.length, (newLen, oldLen) => {
 })
 watch(getLastMessageContent, scheduleScrollIfNeeded)
 watch(() => props.suggestions?.length ?? 0, scheduleScrollIfNeeded)
+watch(() => props.isStreaming, (isStreaming, wasStreaming) => {
+  if (!isStreaming && wasStreaming && (isPinnedToBottom.value || isNearBottom())) {
+    schedulePinnedScroll(() => {
+      followsSubmittedPrompt = false
+    })
+  }
+})
 
 onMounted(() => {
   scrollToBottom()
@@ -338,6 +377,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (scrollRafId !== 0) window.cancelAnimationFrame(scrollRafId)
+  if (layoutScrollRafId !== 0) window.cancelAnimationFrame(layoutScrollRafId)
+  if (layoutScrollTimeoutId !== 0) window.clearTimeout(layoutScrollTimeoutId)
 })
 
 defineExpose({
@@ -351,6 +392,8 @@ defineExpose({
     class="message-list"
     :class="{ compact }"
     @scroll="handleScroll"
+    @wheel="handleUserScrollIntent"
+    @touchmove="handleUserScrollIntent"
   >
     <template v-for="(message, index) in visibleMessages" :key="message.message_id ?? `${message.role}-${index}`">
       <MessageBubble
@@ -412,7 +455,6 @@ defineExpose({
   flex-direction: column;
   min-height: 0;
   padding: var(--space-16);
-  padding-bottom: 116px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -421,7 +463,6 @@ defineExpose({
 
 .message-list.compact {
   padding: var(--space-10);
-  padding-bottom: 108px;
 }
 
 /* Completed offscreen messages retain their measured scroll size while

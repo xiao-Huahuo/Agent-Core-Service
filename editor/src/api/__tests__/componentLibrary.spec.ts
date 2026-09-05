@@ -56,6 +56,34 @@ describe('Component library API client', () => {
     })
   })
 
+  it('uploads drawing-script language and its optional persisted cover reference', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ component: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createComponentLibraryItem({
+      user_id: 'u1',
+      source: 'plt.plot([1, 2])',
+      tag: 'drawing scripts',
+      filename: '曲线图.script',
+      script_language: 'Python',
+      cover_asset_id: 'asset-plot',
+    })
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      user_id: 'u1',
+      source: 'plt.plot([1, 2])',
+      tag: 'drawing scripts',
+      filename: '曲线图.script',
+      script_language: 'Python',
+      cover_asset_id: 'asset-plot',
+    })
+  })
+
   it('renames one persisted component through the shared endpoint', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ component: {} }), {

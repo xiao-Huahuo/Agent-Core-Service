@@ -12,6 +12,7 @@ import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import ComponentNameEditor from '@/components/component_library/ComponentNameEditor.vue'
 import ComponentPreview from '@/components/component_library/ComponentPreview.vue'
+import DrawingScriptCover from '@/components/component_library/DrawingScriptCover.vue'
 import type { ComponentLibraryItem } from '@/types/componentLibrary'
 
 defineOptions({ name: 'ComponentLibraryCard' })
@@ -33,6 +34,7 @@ const emit = defineEmits<{
 }>()
 const copied = ref(false)
 const previewHeight = ref(216)
+const isDrawingScript = computed(() => props.item.source_format === 'script')
 
 /** Add only the sandbox canvas vertical padding; no artificial minimum or maximum. */
 const previewStyle = computed(() => ({
@@ -72,7 +74,9 @@ async function copySource(): Promise<void> {
           <IcIcon name="open-in-full" :size="16" />
         </button>
       </div>
+      <DrawingScriptCover v-if="isDrawingScript" :item="item" />
       <ComponentPreview
+        v-else
         :source="item.source"
         :source-format="item.source_format"
         :label="item.title"
@@ -89,7 +93,10 @@ async function copySource(): Promise<void> {
           @rename="emit('rename', item, $event)"
         />
         <strong v-else class="readonly-title">{{ item.title }}</strong>
-        <span class="tag-pill">{{ item.tag }}</span>
+        <div class="component-capsules">
+          <span class="tag-pill">{{ isDrawingScript ? '绘图脚本' : item.tag }}</span>
+          <span v-if="isDrawingScript" class="language-pill">{{ item.script_language }}</span>
+        </div>
       </div>
       <button
         v-if="!readonly"
@@ -199,6 +206,13 @@ async function copySource(): Promise<void> {
   gap: var(--space-6);
 }
 
+.component-capsules {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
 .readonly-title {
   overflow: hidden;
   color: var(--color-text);
@@ -215,6 +229,17 @@ async function copySource(): Promise<void> {
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 30%, transparent);
   color: var(--color-tag-pill-text);
+  padding: 0 8px;
+  font-size: calc(11px * var(--font-scale));
+}
+
+.language-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
   padding: 0 8px;
   font-size: calc(11px * var(--font-scale));
 }

@@ -933,8 +933,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeActivityM
 
 .activity-agent-icon {
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   position: relative;
   z-index: 1;

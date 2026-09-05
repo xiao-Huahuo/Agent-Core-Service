@@ -2,19 +2,21 @@
   Component upload form.
 
   Usage:
-  Presents a centered library-style dialog with code input on the left, live
-  preview on the right, a compact tag picker, and native multi-file selection.
+  Presents a centered library-style dialog with code on the left and either a
+  live component preview or optional drawing-script cover upload on the right.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import ComponentPreview from '@/components/component_library/ComponentPreview.vue'
 import { buildComponentPreviewDocument } from '@/components/component_library/componentPreview'
+import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import { createComponentLibraryItem } from '@/api/componentLibrary'
 import { COMPONENT_TAGS, type ComponentLibraryItem, type ComponentSourceFormat } from '@/types/componentLibrary'
+import type { LibraryAsset } from '@/types/knowledge'
 
 defineOptions({ name: 'ComponentUploadForm' })
 
@@ -31,6 +33,14 @@ interface SelectedComponentFile {
   source: string
 }
 
+/** Built-in language suggestions are offered through the shared tag picker. */
+const SCRIPT_LANGUAGE_OPTIONS = ['Python', 'R', 'MATLAB', 'JavaScript', 'Julia', 'Gnuplot']
+const DRAWING_SCRIPT_TAG = 'drawing scripts' as const
+const DRAWING_SCRIPT_LABEL = '绘图脚本'
+const COMPONENT_TAG_OPTIONS = COMPONENT_TAGS.map((tag) => (
+  tag === DRAWING_SCRIPT_TAG ? DRAWING_SCRIPT_LABEL : tag
+))
+
 const source = ref('')
 const componentName = ref('')
 const selectedTags = ref<string[]>([])
@@ -38,6 +48,10 @@ const selectedFiles = ref<SelectedComponentFile[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const error = ref('')
 const saving = ref(false)
+const selectedScriptLanguages = ref<string[]>([])
+const coverAsset = ref<LibraryAsset | null>(null)
+const drawingScriptMode = computed(() => selectedTags.value[0] === DRAWING_SCRIPT_LABEL)
+const scriptLanguage = computed(() => selectedScriptLanguages.value[0]?.trim() || '')
 const sourceFormat = computed<ComponentSourceFormat>(() => detectSourceFormat(source.value))
 const filePickerTitle = computed(() => {
   if (!selectedFiles.value.length) return '选择 Vue / HTML 文件'
@@ -48,6 +62,17 @@ const filePickerTitle = computed(() => {
 /** Infer the existing preview compiler from source content. */
 function detectSourceFormat(value: string): ComponentSourceFormat {
   return value.toLowerCase().includes('<template') ? 'vue' : 'html'
+}
+
+/** Clear incompatible file and cover state when the selected tag changes renderer. */
+watch(drawingScriptMode, (active) => {
+  selectedFiles.value = []
+  if (!active) coverAsset.value = null
+})
+
+/** Retain the persistent cover asset selected through the shared library uploader. */
+function handleCoverUploaded(asset: LibraryAsset): void {
+  coverAsset.value = asset
 }
 
 /** Read every selected supported file and preview the first one. */
@@ -84,7 +109,7 @@ function namedFilename(name: string, value: string, originalFilename = ''): stri
 /** Compile once at submission so invalid source is never persisted. */
 async function submit(): Promise<void> {
   error.value = ''
-  const tag = selectedTags.value[0]
+  const tag = drawingScriptMode.value ? DRAWING_SCRIPT_TAG : selectedTags.value[0]
   if (!componentName.value.trim().replace(/\.(vue|html?)$/iu, '')) {
     error.value = '请输入组件名'
     return
@@ -97,24 +122,39 @@ async function submit(): Promise<void> {
     error.value = '请选择一个标签'
     return
   }
+  if (drawingScriptMode.value && !scriptLanguage.value) {
+    error.value = '请输入脚本语言'
+    return
+  }
   try {
-    const uploads = selectedFiles.value.length
+    const uploads = !drawingScriptMode.value && selectedFiles.value.length
       ? selectedFiles.value.map((file, index) => ({
           source: index === 0 ? source.value : file.source,
           filename: index === 0
             ? namedFilename(componentName.value, source.value, file.name)
             : file.name,
         }))
-      : [{ source: source.value, filename: namedFilename(componentName.value, source.value) }]
-    uploads.forEach((upload) => {
-      buildComponentPreviewDocument(upload.source, detectSourceFormat(upload.source))
-    })
+      : [{
+          source: source.value,
+          filename: drawingScriptMode.value
+            ? `${componentName.value.trim().replace(/\.script$/iu, '')}.script`
+            : namedFilename(componentName.value, source.value),
+        }]
+    if (!drawingScriptMode.value) {
+      uploads.forEach((upload) => {
+        buildComponentPreviewDocument(upload.source, detectSourceFormat(upload.source))
+      })
+    }
     saving.value = true
     const results = await Promise.all(uploads.map((upload) => createComponentLibraryItem({
       user_id: props.userId,
       source: upload.source,
       tag: tag as (typeof COMPONENT_TAGS)[number],
       ...(upload.filename ? { filename: upload.filename } : {}),
+      ...(drawingScriptMode.value ? {
+        script_language: scriptLanguage.value,
+        cover_asset_id: coverAsset.value?.asset_id || '',
+      } : {}),
     })))
     const firstResult = results[0]
     if (firstResult) emit('created', firstResult.component)
@@ -146,10 +186,19 @@ async function submit(): Promise<void> {
       <CompactCodeInput
         v-model="source"
         class="code-panel form-input-surface"
-        label="组件代码"
-        placeholder="粘贴 Vue / HTML 代码"
+        :label="drawingScriptMode ? '绘图脚本' : '组件代码'"
+        :placeholder="drawingScriptMode ? '粘贴绘图脚本代码' : '粘贴 Vue / HTML 代码'"
       />
-      <section class="preview-panel" aria-label="实时编译预览">
+      <section v-if="drawingScriptMode" class="script-cover-panel" aria-label="绘图脚本封面图片">
+        <span class="panel-label">封面图片 · 可选</span>
+        <LibraryCoverUploader
+          :user-id="userId"
+          :preview-url="coverAsset?.url"
+          empty-label="点击或拖拽上传封面；留空时显示组件名"
+          @uploaded="handleCoverUploaded"
+        />
+      </section>
+      <section v-else class="preview-panel" aria-label="实时编译预览">
         <span class="panel-label">实时预览 · {{ sourceFormat.toUpperCase() }}</span>
         <ComponentPreview
           v-if="source.trim()"
@@ -163,7 +212,7 @@ async function submit(): Promise<void> {
       </section>
     </div>
 
-    <div class="metadata-fields">
+    <div class="metadata-fields" :class="{ 'drawing-script-fields': drawingScriptMode }">
       <label class="name-field">
         <span>组件名</span>
         <input
@@ -175,14 +224,29 @@ async function submit(): Promise<void> {
           autocomplete="off"
         />
       </label>
-      <div class="tag-field">
+      <div v-if="drawingScriptMode" key="script-language-field" class="script-language-field">
+        <span>脚本语言</span>
+        <LibraryTagPicker
+          key="script-language-picker"
+          v-model="selectedScriptLanguages"
+          :available-tags="SCRIPT_LANGUAGE_OPTIONS"
+          :single="true"
+          :allow-custom="true"
+          :dropdown-align-offset="24"
+          :dropdown-z-index="1200"
+          placeholder="输入或选择脚本语言"
+        />
+      </div>
+      <div key="component-tag-field" class="tag-field">
         <span>标签</span>
         <LibraryTagPicker
+          key="component-tag-picker"
           v-model="selectedTags"
-          :available-tags="[...COMPONENT_TAGS]"
+          :available-tags="COMPONENT_TAG_OPTIONS"
           :single="true"
           :allow-custom="false"
           :dropdown-align-offset="24"
+          :dropdown-z-index="1200"
           placeholder="选择一个标签"
         />
       </div>
@@ -191,6 +255,7 @@ async function submit(): Promise<void> {
     <footer class="form-actions">
       <div class="form-leading">
         <input
+          v-if="!drawingScriptMode"
           ref="fileInput"
           class="hidden-file-input"
           type="file"
@@ -199,6 +264,7 @@ async function submit(): Promise<void> {
           @change="selectComponentFiles"
         />
         <button
+          v-if="!drawingScriptMode"
           class="file-picker-button"
           type="button"
           :title="filePickerTitle"
@@ -225,7 +291,7 @@ async function submit(): Promise<void> {
 <style scoped>
 .upload-backdrop {
   position: fixed;
-  z-index: 80;
+  z-index: 1100;
   inset: 0;
   display: grid;
   place-items: center;
@@ -236,7 +302,8 @@ async function submit(): Promise<void> {
 .upload-form {
   width: min(1080px, 100%);
   max-height: calc(100vh - 48px);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: 28px;
   background: var(--color-surface);
@@ -298,7 +365,8 @@ async function submit(): Promise<void> {
 }
 
 .code-panel,
-.preview-panel {
+.preview-panel,
+.script-cover-panel {
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -309,6 +377,28 @@ async function submit(): Promise<void> {
 .preview-panel {
   border-left: 1px solid var(--color-border-strong);
   background: var(--color-surface-raised);
+}
+
+.script-cover-panel {
+  display: grid;
+  grid-template-rows: 30px minmax(0, 1fr);
+  padding: 0 var(--space-12) var(--space-12);
+  border-left: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.script-cover-panel .panel-label {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.script-cover-panel :deep(.library-cover-uploader) {
+  min-height: 0;
+}
+
+.script-cover-panel :deep(.cover-drop),
+.script-cover-panel :deep(.cover-preview) {
+  border-radius: 14px;
 }
 
 .panel-label {
@@ -337,7 +427,18 @@ async function submit(): Promise<void> {
   padding: var(--space-16) 0 0 var(--space-24);
 }
 
+.metadata-fields.drawing-script-fields {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  padding-right: var(--space-24);
+}
+
+.metadata-fields.drawing-script-fields .tag-field {
+  grid-column: 1 / -1;
+}
+
 .name-field,
+.script-language-field,
 .tag-field {
   display: grid;
   gap: var(--space-8);
@@ -451,6 +552,12 @@ async function submit(): Promise<void> {
     border-left: 0;
   }
 
+  .script-cover-panel {
+    min-height: 300px;
+    border-top: 1px solid var(--color-border-strong);
+    border-left: 0;
+  }
+
   .form-actions {
     align-items: stretch;
     flex-direction: column;
@@ -464,6 +571,37 @@ async function submit(): Promise<void> {
   .metadata-fields {
     width: 100%;
     padding-right: var(--space-24);
+  }
+}
+
+@media (max-width: 480px) {
+  .upload-backdrop {
+    padding: var(--space-8);
+  }
+
+  .metadata-fields.drawing-script-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+    padding: var(--space-12);
+  }
+
+  .metadata-fields.drawing-script-fields .tag-field {
+    grid-column: auto;
+  }
+
+  .compiler-grid {
+    height: 340px;
+    grid-template-rows: minmax(120px, 0.7fr) minmax(200px, 1.3fr);
+    margin: 0 var(--space-8);
+  }
+
+  .script-cover-panel {
+    min-height: 0;
+  }
+
+  .form-actions {
+    gap: var(--space-8);
+    padding: var(--space-12);
   }
 }
 </style>

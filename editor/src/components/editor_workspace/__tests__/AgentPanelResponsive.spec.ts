@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 
 import agentPanelSource from '@/components/editor_workspace/AgentPanel.vue?raw'
 import chatInputSource from '@/components/editor_workspace/agent_chat/ChatInput.vue?raw'
+import messageListSource from '@/components/editor_workspace/agent_chat/MessageList.vue?raw'
 
 describe('Agent sidebar responsive layout', () => {
   it('passes compact mode to both the message list and input', () => {
@@ -36,5 +37,19 @@ describe('Agent sidebar responsive layout', () => {
     expect(agentPanelSource).toMatch(/<MessageList[\s\S]*?:suggestions="chatStore\.taskSuggestions"[\s\S]*?@select-suggestion="sendSuggestion"/s)
     expect(agentPanelSource).not.toMatch(/<ChatInput[\s\S]*?:suggestions="chatStore\.taskSuggestions"/s)
     expect(chatInputSource).not.toContain('task-suggestions')
+  })
+
+  it('uses the composer top edge as the message viewport bottom', () => {
+    expect(agentPanelSource).toMatch(
+      /\.chat-content :deep\(\.chat-input-wrap:not\(\.centered\)\) \{[^}]*position: relative;[^}]*bottom: auto;[^}]*flex: 0 0 auto;/s,
+    )
+    expect(messageListSource).not.toMatch(/padding-bottom: (?:108|116)px;/)
+  })
+
+  it('hands bottom pinning from streaming into the completed turn layout', () => {
+    expect(messageListSource).toMatch(
+      /watch\(\(\) => props\.isStreaming,[\s\S]*?!isStreaming && wasStreaming[\s\S]*?schedulePinnedScroll/,
+    )
+    expect(messageListSource).toContain('scheduledRevision !== userScrollRevision')
   })
 })

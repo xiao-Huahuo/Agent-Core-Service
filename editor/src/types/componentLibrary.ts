@@ -5,6 +5,8 @@
  * Shared by the API client, component grid, upload form, and preview compiler.
  */
 
+import type { LibraryAsset } from '@/types/knowledge'
+
 export const COMPONENT_TAGS = [
   'buttons',
   'checkboxes',
@@ -16,11 +18,12 @@ export const COMPONENT_TAGS = [
   'forms',
   'patterns',
   'tooltips',
+  'drawing scripts',
   'any',
 ] as const
 
 export type ComponentTag = (typeof COMPONENT_TAGS)[number]
-export type ComponentSourceFormat = 'vue' | 'html'
+export type ComponentSourceFormat = 'vue' | 'html' | 'script'
 
 export interface ComponentLibraryItem {
   /** Stable database or bundled-resource identifier. */
@@ -35,6 +38,11 @@ export interface ComponentLibraryItem {
   source_format: ComponentSourceFormat
   /** Original source copied by the user and compiled in the preview. */
   source: string
+  /** Required language label for drawing scripts and empty for preview components. */
+  script_language?: string
+  /** Optional persisted library cover used by drawing-script cards. */
+  cover_asset_id?: string
+  cover_asset?: LibraryAsset | null
   /** Compatibility field; knowledge-directory component files are always false. */
   builtin: boolean
   created_at: string | null
@@ -57,6 +65,10 @@ export interface ComponentLibraryCreatePayload {
   tag: ComponentTag
   /** Optional original basename preserved for file-picker uploads. */
   filename?: string
+  /** Required custom or built-in language when tag is drawing scripts. */
+  script_language?: string
+  /** Optional already-uploaded library cover asset. */
+  cover_asset_id?: string
 }
 
 export interface ComponentLibraryRenamePayload {
@@ -75,4 +87,6 @@ export interface ComponentLibraryUpdatePayload {
   title?: string
   /** Optional replacement fixed category. */
   tag?: ComponentTag
+  script_language?: string
+  cover_asset_id?: string
 }

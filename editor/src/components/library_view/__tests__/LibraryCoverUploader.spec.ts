@@ -13,6 +13,7 @@ import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader
 import createDialogSource from '@/components/library_view/LibraryCreateDialog.vue?raw'
 import itemDialogSource from '@/components/library_view/LibraryItemDialog.vue?raw'
 import appearanceSource from '@/components/settings_view/AppearanceSettingsSection.vue?raw'
+import componentUploadSource from '@/components/component_library/ComponentUploadForm.vue?raw'
 
 const apiMocks = vi.hoisted(() => ({ uploadLibraryCover: vi.fn() }))
 
@@ -40,5 +41,6 @@ describe('LibraryCoverUploader', () => {
     expect(createDialogSource).toContain('<LibraryCoverUploader')
     expect(itemDialogSource).toContain('<LibraryCoverUploader')
     expect(appearanceSource).toContain('<LibraryCoverUploader')
+    expect(componentUploadSource).toContain('<LibraryCoverUploader')
   })
 })

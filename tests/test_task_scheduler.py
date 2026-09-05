@@ -17,6 +17,7 @@ from threading import Thread
 import time
 
 from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessageChunk
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import ToolMessage
 import pytest
@@ -524,6 +525,98 @@ def test_deepseek_adapter_preserves_reasoning_chunks_results_and_requests() -> N
         },
         {"content": "工具结果", "role": "tool", "tool_call_id": "call-1"},
     ]
+
+
+def test_deepseek_dsml_content_is_recovered_as_tool_calls(monkeypatch: object) -> None:
+    """DeepSeek V4 的正文 DSML 必须转回工具调用，不能作为最终回复泄漏。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+    dsml = (
+        "正在生成挂载地址。\n"
+        '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="get_knowledge_file_url">\n'
+        '<｜DSML｜parameter name="path" string="true">游戏资料/原神/日月前事.md'
+        '</｜DSML｜parameter>\n</｜DSML｜invoke>\n'
+        '<｜DSML｜invoke name="get_knowledge_file_url">\n'
+        '<｜DSML｜parameter name="path" string="true">游戏资料/原神/日月前事_来源存档.html'
+        '</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜tool_calls>'
+    )
+    request = SerializedChatRequest.from_messages(
+        task_id="dsml-invoke",
+        task_type=FOREGROUND_AGENT_TASK,
+        messages=[HumanMessage(content="展示日月前事")],
+        tool_names=["get_knowledge_file_url"],
+        timeout_seconds=3,
+        max_retries=0,
+        api_key="test-key",
+        model_name="deepseek-v4-flash",
+    )
+
+    class FakeModel:
+        """返回提供商未结构化的 DeepSeek V4 DSML 正文。"""
+
+        @staticmethod
+        def invoke(_messages: object) -> AIMessage:
+            """模拟一次非流式模型调用。"""
+
+            return AIMessage(content=dsml)
+
+    monkeypatch.setattr(scheduler, "prepare_messages_for_model", lambda **_kwargs: ([], {}))
+    monkeypatch.setattr(scheduler, "_get_chat_model", lambda **_kwargs: FakeModel())
+
+    response = scheduler._invoke_chat_request(request)
+
+    assert response.content == "正在生成挂载地址。\n"
+    assert [call["name"] for call in response.tool_calls] == [
+        "get_knowledge_file_url",
+        "get_knowledge_file_url",
+    ]
+    assert [call["args"] for call in response.tool_calls] == [
+        {"path": "游戏资料/原神/日月前事.md"},
+        {"path": "游戏资料/原神/日月前事_来源存档.html"},
+    ]
+
+
+def test_deepseek_dsml_is_hidden_while_streaming_and_recovered(monkeypatch: object) -> None:
+    """真实双竖线 DSML 经本地模型回退且跨 chunk 分割时也不得泄漏。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+    request = SerializedChatRequest.from_messages(
+        task_id="dsml-stream",
+        task_type=FOREGROUND_AGENT_TASK,
+        messages=[HumanMessage(content="展示日月前事")],
+        tool_names=["read_knowledge_file"],
+        timeout_seconds=3,
+        max_retries=0,
+        model_name="deepseek-v4-flash",
+    )
+
+    class FakeStreamingModel:
+        """把 DSML 起始标记拆开，复现真实 token 流边界。"""
+
+        @staticmethod
+        def stream(_messages: object) -> object:
+            """依次返回普通正文与被拆分的 DSML token。"""
+
+            yield AIMessageChunk(content="正在生成挂载地址。\n<｜｜DS")
+            yield AIMessageChunk(
+                content=(
+                    'ML｜｜tool_calls>\n<｜｜DSML｜｜invoke name="read_knowledge_file">\n'
+                    '<｜｜DSML｜｜parameter name="path" string="true">游戏资料/原神/日月前事_来源存档_BWIKI.md'
+                    '</｜｜DSML｜｜parameter>\n</｜｜DSML｜｜invoke>\n</｜｜DSML｜｜tool_calls>'
+                )
+            )
+
+    monkeypatch.setattr(scheduler, "prepare_messages_for_model", lambda **_kwargs: ([], {}))
+    monkeypatch.setattr(scheduler, "_get_chat_model", lambda **_kwargs: FakeStreamingModel())
+
+    chunks = list(scheduler._stream_chat_request(request))
+    visible = "".join(chunk.get("content_delta", "") for chunk in chunks if chunk.get("status") != "complete")
+    final_message = chunks[-1]["message"]
+
+    assert visible == "正在生成挂载地址。\n"
+    assert final_message.content == "正在生成挂载地址。\n"
+    assert final_message.tool_calls[0]["name"] == "read_knowledge_file"
+    assert final_message.tool_calls[0]["args"] == {"path": "游戏资料/原神/日月前事_来源存档_BWIKI.md"}
 
 
 def test_namespaced_deepseek_model_uses_reasoning_adapter() -> None:

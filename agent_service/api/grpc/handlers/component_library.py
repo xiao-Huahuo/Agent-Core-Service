@@ -179,6 +179,8 @@ class ComponentLibraryGrpcHandlerMixin:
             source=str(payload.get("source", "")),
             tag=str(payload.get("tag", "")),
             filename=str(payload.get("filename", "")),
+            script_language=str(payload.get("script_language", "")),
+            cover_asset_id=str(payload.get("cover_asset_id", "")),
         )
     def RenameComponentLibraryComponent(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """Persist one incremental component title, source, or tag update."""
@@ -192,6 +194,8 @@ class ComponentLibraryGrpcHandlerMixin:
             title=str(payload["title"]) if "title" in payload else None,
             source=str(payload["source"]) if "source" in payload else None,
             tag=str(payload["tag"]) if "tag" in payload else None,
+            script_language=str(payload["script_language"]) if "script_language" in payload else None,
+            cover_asset_id=str(payload["cover_asset_id"]) if "cover_asset_id" in payload else None,
         )
     def DeleteComponentLibraryComponent(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """Delete one component through the same file service as REST."""

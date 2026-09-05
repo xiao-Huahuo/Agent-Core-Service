@@ -1915,4 +1915,15 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   position: relative;
   z-index: 2;
 }
+
+/* Once a conversation starts, the composer participates in the flex layout so
+   the message viewport ends at its top edge, including when the input grows. */
+.chat-content :deep(.chat-input-wrap:not(.centered)) {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+  margin: 0 auto var(--space-16);
+  transform: none;
+}
 </style>

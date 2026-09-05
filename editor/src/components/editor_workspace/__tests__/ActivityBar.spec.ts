@@ -27,6 +27,10 @@ describe('ActivityBar', () => {
     expect(activityBarSource).toMatch(/\.activity-bar\.management \.activity-label \{[^}]*width: 100%;[^}]*text-align: left;/)
   })
 
+  it('compensates for the transparent padding around the Agent raster icon', () => {
+    expect(activityBarSource).toMatch(/\.activity-agent-icon \{[^}]*width: 28px;[^}]*height: 28px;/s)
+  })
+
   it('uses the queue-lane frame with mode-specific outer corners', () => {
     expect(editorWorkspaceSource).toContain('const ACTIVITY_BAR_ICON_WIDTH = 64')
     expect(activityBarSource).toMatch(

@@ -42,6 +42,8 @@ async def create_component_library_item(body: ComponentLibraryItemCreate) -> dic
             source=body.source,
             tag=body.tag,
             filename=body.filename,
+            script_language=body.script_language,
+            cover_asset_id=body.cover_asset_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -59,6 +61,8 @@ async def rename_component_library_item(body: ComponentLibraryItemUpdate) -> dic
             title=body.title,
             source=body.source,
             tag=body.tag,
+            script_language=body.script_language,
+            cover_asset_id=body.cover_asset_id,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

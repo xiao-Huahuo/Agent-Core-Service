@@ -36,6 +36,8 @@ class ComponentLibraryItemCreate(ComponentLibraryItemBase):
     """Validate one component upload request."""
 
     filename: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
+    script_language: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    cover_asset_id: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
 
 
 class ComponentLibraryItemUpdate(SQLModel):
@@ -46,6 +48,8 @@ class ComponentLibraryItemUpdate(SQLModel):
     title: str | None = Field(default=None, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.component_filename_max_length)
     source: str | None = Field(default=None, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.component_schema_source_max_length)
     tag: str | None = Field(default=None, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    script_language: str | None = Field(default=None, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    cover_asset_id: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
 
 
 class ComponentLibraryItemOut(ComponentLibraryItemBase):
@@ -55,5 +59,8 @@ class ComponentLibraryItemOut(ComponentLibraryItemBase):
     title: str
     source_format: str
     builtin: bool
+    script_language: str = ""
+    cover_asset_id: str = ""
+    cover_asset: dict | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

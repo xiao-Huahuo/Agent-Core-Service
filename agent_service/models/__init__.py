@@ -13,6 +13,7 @@ from agent_service.models.agent_change import AgentChangeSnapshotRecord
 from agent_service.models.agent_queue import AgentQueueSettingsRecord, AgentQueueTaskRecord
 from agent_service.models.activity import ActivityEventRecord
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
+from agent_service.models.component_library import ComponentLibraryMetadata
 from agent_service.models.favorite import FavoriteRecord
 from agent_service.models.privacy import PrivacyRecord
 from agent_service.models.feedback import FeedbackRecord
@@ -43,6 +44,7 @@ __all__ = [
     "ActivityEventRecord",
     "AutomationRunRecord",
     "AutomationTaskRecord",
+    "ComponentLibraryMetadata",
     "FavoriteRecord",
     "PrivacyRecord",
     "FeedbackRecord",

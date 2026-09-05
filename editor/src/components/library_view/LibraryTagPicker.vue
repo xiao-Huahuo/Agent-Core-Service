@@ -25,11 +25,13 @@ const props = withDefaults(defineProps<{
   allowCustom?: boolean
   placeholder?: string
   dropdownAlignOffset?: number
+  dropdownZIndex?: number
 }>(), {
   single: false,
   allowCustom: true,
   placeholder: '输入标签后回车',
   dropdownAlignOffset: 0,
+  dropdownZIndex: 100,
 })
 const tags = defineModel<string[]>({ required: true })
 const draft = ref('')
@@ -53,6 +55,16 @@ function removeTag(name: string) {
   const nextInjectedTags = new Set(injectedTags.value)
   nextInjectedTags.delete(name)
   injectedTags.value = nextInjectedTags
+}
+
+/** Select one candidate and keep only multi-select menus open for further picks. */
+function selectCandidate(name: string, event: Event) {
+  addTag(name, true)
+  if (props.single) {
+    expanded.value = false
+  } else {
+    event.preventDefault()
+  }
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -83,8 +95,12 @@ function handleKeydown(event: KeyboardEvent) {
         </DropdownMenuTrigger>
       </div>
       <DropdownMenuPortal>
-        <DropdownMenuContent align="end" :align-offset="dropdownAlignOffset">
-          <DropdownMenuItem v-for="tag in candidates" :key="tag" @select.prevent="addTag(tag, true)">
+        <DropdownMenuContent
+          align="end"
+          :align-offset="dropdownAlignOffset"
+          :style="{ zIndex: dropdownZIndex }"
+        >
+          <DropdownMenuItem v-for="tag in candidates" :key="tag" @select="selectCandidate(tag, $event)">
             <IcIcon name="label" :size="14" />
             <span>{{ tag }}</span>
           </DropdownMenuItem>

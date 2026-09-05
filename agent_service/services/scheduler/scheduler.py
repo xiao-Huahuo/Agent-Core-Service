@@ -45,7 +45,11 @@ from agent_service.services.scheduler.redis_backend import (
     SerializedSummaryJobRequest,
     SerializedSummaryJobResult,
 )
-from agent_service.services.scheduler.runtime import LLMTaskRuntimeMixin
+from agent_service.services.scheduler.runtime import (
+    LLMTaskRuntimeMixin,
+    filter_deepseek_dsml_stream_delta,
+    recover_deepseek_dsml_tool_calls,
+)
 from agent_service.services.scheduler.types import (
     BACKGROUND_FACT_RESOLUTION_TASK,
     BACKGROUND_SUMMARY_TASK,
@@ -824,6 +828,11 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             response = model.invoke(messages)
         if not isinstance(response, BaseMessage):
             raise TypeError("ChatOpenAI.invoke 未返回 LangChain BaseMessage。")
+        if request.tool_names:
+            response = recover_deepseek_dsml_tool_calls(
+                response,
+                allowed_tool_names=request.tool_names,
+            )
         return response
 
     def _stream_chat_request(self, request: SerializedChatRequest) -> Iterator[dict[str, Any]]:
@@ -861,11 +870,14 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             small_base_url=request.small_base_url,
             small_model_name=request.small_model_name,
         )
+        recover_dsml = bool(request.tool_names)
         breaker = self._circuit_breakers[request.task_type]
         try:
             with self._acquire_model_pool(request.model_tier):
                 merged: Any = None
                 streamed_content_parts: list[str] = []
+                dsml_stream_buffer = ""
+                suppressing_dsml = False
                 raw_content_chars = 0
                 content_chunk_count = 0
                 max_content_chunk_chars = 0
@@ -893,9 +905,19 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                             mixed_reasoning_content_chunks += 1
                         if tool_calls:
                             mixed_tool_content_chunks += 1
-                        # reasoning/content/tool_calls 是三个独立通道；任一字段
-                        # 存在都不得阻断同一 provider chunk 中的正文增量。
-                        yield {"content_delta": content_delta}
+                        # reasoning/content/tool_calls 是三个独立通道；DeepSeek
+                        # 若把 DSML 错放进正文，则在流式边界先隐藏再于终态恢复。
+                        visible_delta = content_delta
+                        if recover_dsml:
+                            visible_delta, dsml_stream_buffer, suppressing_dsml = (
+                                filter_deepseek_dsml_stream_delta(
+                                    dsml_stream_buffer,
+                                    content_delta,
+                                    suppressing=suppressing_dsml,
+                                )
+                            )
+                        if visible_delta:
+                            yield {"content_delta": visible_delta}
                     if merged is None:
                         merged = chunk
                     else:
@@ -903,6 +925,8 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                 if merged is None:
                     yield {"content_delta": "", "message": AIMessage(content=""), "status": "complete"}
                     return
+                if recover_dsml and dsml_stream_buffer and not suppressing_dsml:
+                    yield {"content_delta": dsml_stream_buffer}
                 full_content: str = getattr(merged, "content", "") or ""
                 if not isinstance(full_content, str):
                     full_content = ""
@@ -948,8 +972,13 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                 if usage_metadata:
                     final_message_kwargs["usage_metadata"] = usage_metadata
                 final_message = AIMessage(**final_message_kwargs)
+                if recover_dsml:
+                    final_message = recover_deepseek_dsml_tool_calls(
+                        final_message,
+                        allowed_tool_names=request.tool_names,
+                    )
                 yield {
-                    "content_delta": full_content,
+                    "content_delta": final_message.content,
                     "message": final_message,
                     "status": "complete",
                     "stream_diagnostics": stream_diagnostics,
