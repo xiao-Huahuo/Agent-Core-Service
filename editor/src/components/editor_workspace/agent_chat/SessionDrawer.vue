@@ -272,7 +272,7 @@ async function clearAllSessions() {
   display: grid;
   align-items: center;
   gap: var(--space-4);
-  min-height: 58px;
+  min-height: 64px;
   padding: 0 var(--space-20);
   border-bottom: 0;
   background: transparent;
@@ -314,16 +314,18 @@ async function clearAllSessions() {
 }
 
 .brand-logo {
-  width: 22px;
-  height: 22px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
 }
 
 .brand-title {
   display: block;
-  height: 22px;
-  width: auto;
+  width: min(140px, 100%);
+  height: auto;
+  max-height: 44px;
   object-fit: contain;
+  object-position: left center;
 }
 
 .session-streaming {

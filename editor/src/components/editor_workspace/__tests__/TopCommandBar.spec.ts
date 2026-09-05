@@ -69,17 +69,15 @@ describe('TopCommandBar knowledge-library switcher', () => {
     })
   })
 
-  it('shows a folder button before the library name without rendering the root path as text', () => {
+  it('shows the enlarged color logo and Agent title artwork instead of the knowledge-library text', () => {
     prepareStores()
     const wrapper = mountTopCommandBar()
+    const source = readFileSync(resolve(__dirname, '..', 'TopCommandBar.vue'), 'utf-8')
 
-    const brandCopy = wrapper.get('.brand-copy')
-    const folderButton = wrapper.get('button.library-folder-btn')
-
-    expect(brandCopy.text()).toBe('')
-    expect(folderButton.attributes('title')).toBe('D:/Knowledge/Primary')
-    expect(folderButton.attributes('aria-label')).toBe('切换知识库')
-    expect(wrapper.get('input.library-name-input').element).toHaveProperty('value', '主知识库')
+    expect(wrapper.find('.library-name-text').exists()).toBe(false)
+    expect(wrapper.get('.brand-title').attributes('alt')).toBe('MetaWeave')
+    expect(source).toMatch(/\.logo-img\s*\{[^}]*width:\s*58px;[^}]*height:\s*58px;/su)
+    expect(source).not.toMatch(/\.logo-img\s*\{[^}]*grayscale/su)
   })
 
   it('keeps the toolbar search inside the right-side action group', () => {
@@ -90,10 +88,10 @@ describe('TopCommandBar knowledge-library switcher', () => {
     expect(wrapper.findAll('.actions > .search-center')).toHaveLength(1)
   })
 
-  it('does not shrink the library name when an ingestion progress bar is visible', () => {
+  it('keeps the Agent title artwork in the flexible brand area beside progress', () => {
     const source = readFileSync(resolve(__dirname, '..', 'TopCommandBar.vue'), 'utf-8')
 
-    expect(source).toMatch(/\.brand-copy\s*\{[^}]*flex:\s*0 0 auto;/su)
+    expect(source).toMatch(/\.brand-copy\s*\{[^}]*flex:\s*1 1 auto;/su)
   })
 
   it('exposes the compact browser-sidebar toggle in the application top bar', async () => {

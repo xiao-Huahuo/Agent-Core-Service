@@ -17,6 +17,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { checkModelDisk } from '@/api/settings'
 import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
+import lightTitle from '@/assets/images/亮色标题.png'
+import darkTitle from '@/assets/images/暗色标题.png'
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 defineProps<{ gitOpen: boolean; browserOpen: boolean; mobile?: boolean }>()
@@ -70,10 +72,7 @@ const graphProgressLabel = computed(() => {
 const agentActive = computed(() => workspaceStore.agentSidebarOpen)
 const todoActive = computed(() => workspaceStore.todoSidebarOpen)
 const logoSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
-
-const activeLibraryName = computed(() => {
-  return settingsStore.activeKnowledgeLibrary?.name?.trim() || settingsStore.profile.knowledgeDir
-})
+const titleSrc = computed(() => settingsStore.isDark ? darkTitle : lightTitle)
 
 async function handleCloseWindow() {
   if (!(await workspaceStore.confirmSaveDirtyBeforeExit())) {
@@ -91,7 +90,7 @@ async function handleCloseWindow() {
         <img :src="logoSrc" class="logo-img" alt="MetaWeave" />
       </button>
       <div class="brand-copy">
-        <span class="library-name-text" :title="settingsStore.profile.knowledgeDir">{{ activeLibraryName }}</span>
+        <img :src="titleSrc" class="brand-title" alt="MetaWeave" />
       </div>
       <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
         <span class="ingestion-progress-track" aria-hidden="true">
@@ -242,8 +241,8 @@ async function handleCloseWindow() {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  min-height: 56px;
-  padding: 6px var(--space-10);
+  min-height: 64px;
+  padding: 0 var(--space-10);
   background: var(--color-chrome-rail-bg);
   -webkit-app-region: drag;
   user-select: none;
@@ -257,7 +256,7 @@ async function handleCloseWindow() {
   gap: var(--space-8);
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(280px, 30vw);
+  max-width: min(360px, 34vw);
   overflow: hidden;
   z-index: 1;
   padding-left: var(--space-4);
@@ -267,8 +266,9 @@ async function handleCloseWindow() {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   -webkit-app-region: no-drag;
 }
 
@@ -277,8 +277,8 @@ async function handleCloseWindow() {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
+  width: 64px;
+  height: 64px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -293,32 +293,19 @@ async function handleCloseWindow() {
 
 .logo-img {
   display: block;
-  width: 30px;
-  height: 30px;
+  width: 58px;
+  height: 58px;
   object-fit: contain;
-  filter: grayscale(1) saturate(0);
-  opacity: 0.82;
-  transition:
-    filter var(--transition-fast),
-    opacity var(--transition-fast);
-}
-
-.logo-btn:hover .logo-img {
-  filter: grayscale(1) saturate(0);
   opacity: 1;
 }
 
-.library-name-text {
+.brand-title {
   display: block;
-  min-width: 40px;
-  max-width: min(220px, 24vw);
-  overflow: hidden;
-  color: var(--color-text);
-  font-size: calc(13px * var(--font-scale));
-  font-weight: 650;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: min(160px, 100%);
+  height: auto;
+  max-height: 44px;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .search-center {
@@ -734,7 +721,7 @@ kbd {
   }
 
   .brand {
-    max-width: 180px;
+    max-width: min(240px, 42vw);
   }
 
   .topbar-optional {
@@ -745,7 +732,7 @@ kbd {
 @media (max-width: 760px) {
   .topbar {
     align-items: center;
-    padding: var(--space-10);
+    padding: 0 var(--space-10);
   }
 
   .actions {
@@ -754,7 +741,11 @@ kbd {
 
   .brand {
     flex: 0 1 auto;
-    max-width: 132px;
+    max-width: min(220px, 48vw);
+  }
+
+  .brand-copy {
+    display: none;
   }
 
   .search-center:has(.search-wrapper.focused) {
@@ -767,7 +758,7 @@ kbd {
   display: grid;
   grid-template-columns: minmax(120px, 1fr) auto;
   justify-content: stretch;
-  padding: var(--space-8) var(--space-10);
+  padding: 0 var(--space-10);
 }
 
 .topbar.mobile .actions > * {
@@ -782,17 +773,7 @@ kbd {
 }
 
 .topbar.mobile .brand-copy {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-.topbar.mobile .library-name-text {
-  width: 100% !important;
-  min-width: 0;
-  max-width: none;
-  text-overflow: ellipsis;
+  display: none;
 }
 
 .topbar.mobile .actions {
