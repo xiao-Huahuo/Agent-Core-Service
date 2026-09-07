@@ -28,7 +28,12 @@ const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 
 const SETTINGS_ACTIVE_TAB_KEY = 'agent_editor_settings_active_tab'
-const activeTab = ref<SettingsTabKey>((localStorage.getItem(SETTINGS_ACTIVE_TAB_KEY) as SettingsTabKey | null) ?? 'basic')
+const persistedSettingsTab = localStorage.getItem(SETTINGS_ACTIVE_TAB_KEY)
+const activeTab = ref<SettingsTabKey>(
+  persistedSettingsTab === 'browser'
+    ? 'web'
+    : (persistedSettingsTab as SettingsTabKey | null) ?? 'basic',
+)
 
 const tabs = [
   { key: 'basic' as const, label: '基础设置' },
@@ -36,7 +41,6 @@ const tabs = [
   { key: 'llm' as const, label: 'LLM 配置' },
   { key: 'terminal' as const, label: '终端沙盒' },
   { key: 'web' as const, label: '联网配置' },
-  { key: 'browser' as const, label: '浏览器' },
   { key: 'memory' as const, label: '记忆与指令' },
   { key: 'graph' as const, label: '图谱' },
   { key: 'safety' as const, label: '密码与安全' },
@@ -51,9 +55,10 @@ watch(activeTab, (tab) => {
 })
 
 function handleExternalSettingsTab(event: Event) {
-  const tab = (event as CustomEvent<SettingsTabKey>).detail
+  const requestedTab = (event as CustomEvent<string>).detail
+  const tab = requestedTab === 'browser' ? 'web' : requestedTab
   if (tabs.some((item) => item.key === tab)) {
-    activeTab.value = tab
+    activeTab.value = tab as SettingsTabKey
   }
 }
 /* ---- Basic settings ---- */
@@ -850,25 +855,25 @@ onBeforeUnmount(() => {
         @save="handleSaveTerminalSandbox"
       />
 
-      <WebSearchSettingsSection
-        v-if="activeTab === 'web'"
-        v-model:proxy-url-draft="proxyUrlDraft"
-        v-model:web-search-enabled-draft="webSearchEnabledDraft"
-        v-model:web-search-max-results-draft="webSearchMaxResultsDraft"
-        :web-search-msg="webSearchMsg"
-        :web-search-saving="webSearchSaving"
-        @save="handleSaveWebSearch"
-      />
+      <div v-if="activeTab === 'web'" class="web-settings-sections">
+        <WebSearchSettingsSection
+          v-model:proxy-url-draft="proxyUrlDraft"
+          v-model:web-search-enabled-draft="webSearchEnabledDraft"
+          v-model:web-search-max-results-draft="webSearchMaxResultsDraft"
+          :web-search-msg="webSearchMsg"
+          :web-search-saving="webSearchSaving"
+          @save="handleSaveWebSearch"
+        />
 
-      <BrowserSettingsSection
-        v-if="activeTab === 'browser'"
-        v-model:browser-home-url-draft="browserHomeUrlDraft"
-        v-model:browser-proxy-url-draft="browserProxyUrlDraft"
-        :inherited-proxy-url="proxyUrlDraft"
-        :saving="browserSaving"
-        :status-message="browserMsg"
-        @save="handleSaveBrowser"
-      />
+        <BrowserSettingsSection
+          v-model:browser-home-url-draft="browserHomeUrlDraft"
+          v-model:browser-proxy-url-draft="browserProxyUrlDraft"
+          :inherited-proxy-url="proxyUrlDraft"
+          :saving="browserSaving"
+          :status-message="browserMsg"
+          @save="handleSaveBrowser"
+        />
+      </div>
 
       <MemorySettingsSection
         v-if="activeTab === 'memory'"
@@ -982,6 +987,17 @@ onBeforeUnmount(() => {
 
 .settings-body.settings-body-skills {
   padding: 0;
+}
+
+.web-settings-sections {
+  display: grid;
+  gap: var(--space-24);
+  min-width: 0;
+}
+
+.web-settings-sections > .setting-section,
+.web-settings-sections .setting-row > input {
+  min-width: 0;
 }
 
 @media (max-width: 600px) {

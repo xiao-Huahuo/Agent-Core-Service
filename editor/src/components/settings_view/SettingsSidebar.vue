@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import IcIcon from '@/components/common/IcIcon.vue'
 
-export type SettingsTabKey = 'basic' | 'appearance' | 'llm' | 'tools' | 'terminal' | 'web' | 'browser' | 'memory' | 'graph' | 'safety' | 'storage' | 'floating' | 'skills' | 'mcp'
+export type SettingsTabKey = 'basic' | 'appearance' | 'llm' | 'tools' | 'terminal' | 'web' | 'memory' | 'graph' | 'safety' | 'storage' | 'floating' | 'skills' | 'mcp'
 
 /** Semantic icons remain local through the shared DSH + morphicons registry. */
 const TAB_ICONS: Record<SettingsTabKey, string> = {
@@ -18,7 +18,6 @@ const TAB_ICONS: Record<SettingsTabKey, string> = {
   tools: 'build',
   terminal: 'code',
   web: 'language',
-  browser: 'open-in-new',
   memory: 'book',
   graph: 'hub',
   safety: 'shield',
