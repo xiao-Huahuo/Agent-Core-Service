@@ -177,6 +177,7 @@ function handleRowDrop(event: DragEvent) {
         @dragover="handleRowDragover"
         @dragleave="handleRowDragLeave"
         @drop="handleRowDrop"
+        @click.prevent="handleRowSelect($event)"
         @keydown.enter="handleRowSelect($event)"
         @contextmenu.prevent.stop="emit('contextMenu', node, $event)"
       >

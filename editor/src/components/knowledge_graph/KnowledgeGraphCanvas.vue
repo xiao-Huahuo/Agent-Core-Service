@@ -110,7 +110,7 @@ function readTheme(): KnowledgeGraphRenderTheme {
     grid: cssVar('--color-primary-softer', isDark ? 'rgba(66, 36, 235, 0.08)' : 'rgba(66, 36, 235, 0.07)'),
     text: cssVar('--color-text', isDark ? '#f4f4f6' : '#171721'),
     mutedText: cssVar('--color-text-muted', isDark ? '#8f93a3' : '#707486'),
-    edge: isDark ? 'rgba(143, 147, 163, 0.32)' : 'rgba(112, 116, 134, 0.34)',
+    edge: isDark ? 'rgba(199, 203, 220, 0.78)' : 'rgba(63, 66, 82, 0.58)',
     edgeActive: cssVar('--color-primary', '#4224eb'),
     root: cssVar('--color-primary', '#4224eb'),
     folder: cssVar('--color-primary', '#4224eb'),

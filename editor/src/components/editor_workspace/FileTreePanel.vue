@@ -465,9 +465,6 @@ function handleSelect(node: KnowledgeFileNode, event?: MouseEvent | KeyboardEven
   if (inlineEdit.value?.path === node.path) {
     return
   }
-  if (node.isDir) {
-    workspaceStore.toggleDirectory(node.path)
-  }
   if (event?.shiftKey) {
     workspaceStore.selectTreeNode(node, {
       rangePaths: rangePathsBetween(workspaceStore.selectionAnchorPath || selectedTreePath.value, node.path),
@@ -477,6 +474,9 @@ function handleSelect(node: KnowledgeFileNode, event?: MouseEvent | KeyboardEven
   if (event?.ctrlKey || event?.metaKey) {
     workspaceStore.selectTreeNode(node, { additive: true })
     return
+  }
+  if (node.isDir) {
+    workspaceStore.toggleDirectory(node.path)
   }
   workspaceStore.selectTreeNode(node)
   if (!node.isDir) {

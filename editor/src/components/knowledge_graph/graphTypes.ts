@@ -105,7 +105,7 @@ export interface LayeredForceLayoutOptions {
 
 /** Visual theme passed into the Canvas renderer. */
 export interface KnowledgeGraphRenderTheme {
-  /** Whether the current editor theme is dark, used for subtle canvas glow. */
+  /** Whether the current editor theme is dark, used for theme-specific graph colors. */
   isDark: boolean
   canvas: string
   grid: string
@@ -125,7 +125,7 @@ export interface KnowledgeGraphRenderTheme {
 
 /** Hover highlight spread animation state. */
 export interface KnowledgeGraphHoverAnimation {
-  /** Node where the glow starts. */
+  /** Node where the animated shape and color highlight starts. */
   centerNodeId: string
   /** Elapsed animation time in milliseconds. */
   elapsedMs: number

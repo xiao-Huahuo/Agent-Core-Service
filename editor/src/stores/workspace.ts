@@ -2637,7 +2637,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       await loadKnowledgeTrash()
       selectedTreePath.value = result.restored_path
       setTreeSelection([result.restored_path], result.restored_path)
-      showToast(`已恢复 ${entry.name}`)
+      showToast(result.artifacts_restored ? `已恢复 ${entry.name}` : `已恢复 ${entry.name}，但索引或图谱重建失败`)
     } catch (err: unknown) {
       ignoreNextTreeEvent.value -= 1
       showToast(err instanceof ApiError ? err.message : '恢复失败')

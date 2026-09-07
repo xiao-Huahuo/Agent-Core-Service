@@ -8,7 +8,7 @@
 
 import { apiDelete, apiGet, apiPost, apiPostForm, buildApiUrl, streamLines } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
-import type { KnowledgeFileNode, KnowledgeSemanticGraphResponse, KnowledgeTrashEntry, SearchResults } from '@/types/knowledge'
+import type { KnowledgeFileNode, KnowledgeSemanticGraphResponse, KnowledgeTrashEntry, KnowledgeTrashRestoreResult, SearchResults } from '@/types/knowledge'
 import type { FilePreviewPayload } from '@/types/knowledge'
 import type { KnowledgeIngestionProgressEvent, KnowledgeRebuildResponse } from '@/api/settings'
 
@@ -239,7 +239,7 @@ export function listKnowledgeTrash(userId: string): Promise<KnowledgeTrashRespon
 export function restoreKnowledgeTrashEntry(
   userId: string,
   trashId: string,
-): Promise<{ ok: boolean; restored_path: string; node: KnowledgeFileNode }> {
+): Promise<KnowledgeTrashRestoreResult> {
   return apiPost(`${API_ROUTES.KNOWLEDGE_FILE_TRASH}/${encodeURIComponent(trashId)}/restore`, {
     user_id: userId,
   })

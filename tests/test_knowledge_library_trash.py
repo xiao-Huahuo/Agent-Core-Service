@@ -62,6 +62,7 @@ class _GraphServiceStub:
     def __init__(self) -> None:
         self.statuses: dict[str, object] = {}
         self.deleted_document_ids: list[str] = []
+        self.extracted_frontmatter_paths: list[Path] = []
 
     def list_document_statuses(self, *, user_id: str, library_id: str) -> dict[str, object]:
         return dict(self.statuses)
@@ -69,6 +70,19 @@ class _GraphServiceStub:
     def delete_document_graph(self, *, user_id: str, library_id: str, document_id: str) -> int:
         self.deleted_document_ids.append(document_id)
         return 1
+
+    def extract_frontmatter_file(
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        frontmatter_path: Path,
+        llm_config: dict[str, object] | None = None,
+    ) -> SimpleNamespace:
+        """记录恢复后的图谱重建请求。"""
+
+        self.extracted_frontmatter_paths.append(frontmatter_path)
+        return SimpleNamespace(files_extracted=1)
 
 
 def _service(
@@ -99,12 +113,15 @@ def _service(
     )
 
 
-def test_delete_path_moves_file_to_trash_and_restore(tmp_path: Path) -> None:
+def test_delete_path_moves_file_to_trash_and_restore(tmp_path: Path, monkeypatch) -> None:
     knowledge_dir = tmp_path / "knowledge"
     knowledge_dir.mkdir()
     source = knowledge_dir / "notes.md"
     source.write_text("hello", encoding="utf-8")
-    service, memory_service, _settings_service, _graph_service = _service(tmp_path, knowledge_dir)
+    managed_asset = knowledge_dir / ".mw" / "assets" / "notes.md" / "image.png"
+    managed_asset.parent.mkdir(parents=True)
+    managed_asset.write_bytes(b"image")
+    service, memory_service, _settings_service, graph_service = _service(tmp_path, knowledge_dir)
 
     result = service.delete_path(user_id="user-1", path="notes.md")
 
@@ -112,15 +129,31 @@ def test_delete_path_moves_file_to_trash_and_restore(tmp_path: Path) -> None:
     assert result["original_relative_path"] == "notes.md"
     assert result["chunks_deleted"] == 3
     assert not source.exists()
+    assert not managed_asset.exists()
     assert memory_service.deleted_sources
     trash_entries = service.list_deleted_paths(user_id="user-1")
     assert [entry["trash_id"] for entry in trash_entries] == [result["trash_id"]]
 
+    ingestion_calls: list[str] = []
+
+    def fake_ingest_path(*, user_id: str, path: str, progress_callback: object | None = None) -> SimpleNamespace:
+        """模拟正式灌库链路重新生成当前文件的 frontmatter。"""
+
+        ingestion_calls.append(path)
+        frontmatter_path = service._resolve_user_frontmatter_dir("user-1", "library-1") / "notes.json"
+        frontmatter_path.parent.mkdir(parents=True, exist_ok=True)
+        frontmatter_path.write_text('{"document_id":"doc-notes"}', encoding="utf-8")
+        return SimpleNamespace(files_ingested=1)
+
+    monkeypatch.setattr(service, "ingest_path", fake_ingest_path)
     restored = service.restore_deleted_path(user_id="user-1", trash_id=result["trash_id"])
 
     assert restored["ok"] is True
     assert restored["restored_path"] == "notes.md"
+    assert restored["artifacts_restored"] is True
     assert source.read_text(encoding="utf-8") == "hello"
+    assert ingestion_calls == ["notes.md"]
+    assert [path.name for path in graph_service.extracted_frontmatter_paths] == ["notes.json"]
     assert service.list_deleted_paths(user_id="user-1") == []
 
 

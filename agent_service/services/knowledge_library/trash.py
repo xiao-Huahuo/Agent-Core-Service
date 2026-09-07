@@ -115,11 +115,18 @@ class KnowledgeTrashMixin:
         shutil.move(str(content_path), str(target))
         shutil.rmtree(entry_dir, onerror=KnowledgeTrashMixin._remove_readonly)
         restored_path = self._relative_path(path=target.resolve(), root=root)
+        artifact_result = self._restore_index_artifacts(
+            user_id=user_id,
+            root=root,
+            target=target,
+            restored_path=restored_path,
+        )
         return {
             "ok": True,
             "trash_id": str(metadata.get("trash_id") or trash_id),
             "restored_path": restored_path,
             "node": self._path_to_node(path=target.resolve(), root=root),
+            **artifact_result,
         }
     def delete_trash_entry(self, *, user_id: str, trash_id: str) -> dict[str, Any]:
         """Permanently delete one trash entry."""
@@ -287,6 +294,7 @@ class KnowledgeTrashMixin:
         )
         frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id).resolve()
         markdown_root = self._resolve_user_markdown_dir(normalized_user_id, library_id).resolve()
+        assets_root = (Path(str(active_library["knowledge_dir"])).expanduser().resolve() / ".mw" / "assets").resolve()
         chunks_deleted = 0
         for relative_path in relative_paths:
             normalized_path = relative_path.replace("\\", "/").strip("/")
@@ -305,6 +313,12 @@ class KnowledgeTrashMixin:
             markdown_path = (markdown_root / normalized_path).with_suffix(".md").resolve()
             if self._is_relative_to(markdown_path, markdown_root) and markdown_path.exists():
                 markdown_path.unlink()
+            asset_path = (assets_root / normalized_path).resolve()
+            if self._is_relative_to(asset_path, assets_root) and asset_path.exists():
+                if asset_path.is_dir():
+                    shutil.rmtree(asset_path, onerror=KnowledgeTrashMixin._remove_readonly)
+                else:
+                    self._force_unlink(asset_path)
             # 同时删除该文档产生的图谱点边和状态记录
             delete_document_graph = getattr(self.knowledge_graph_service, "delete_document_graph", None)
             if callable(delete_document_graph):
@@ -314,3 +328,59 @@ class KnowledgeTrashMixin:
                     document_id=source_id,
                 )
         return chunks_deleted
+
+    def _restore_index_artifacts(
+        self,
+        *,
+        user_id: str,
+        root: Path,
+        target: Path,
+        restored_path: str,
+    ) -> dict[str, Any]:
+        """恢复源文件后重建 `.mw`、向量切片和文档图谱。"""
+
+        try:
+            ingestion_result = self.ingest_path(user_id=user_id, path=restored_path)
+        except Exception:
+            logger.exception("恢复文件后重新灌库失败 | path=%s", restored_path)
+            return {"artifacts_restored": False, "files_reingested": 0, "graphs_restored": 0}
+
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(dict(profile["active_knowledge_library"])["library_id"])
+        frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id).resolve()
+        get_llm_config = getattr(self.settings_service, "get_llm_config", None)
+        llm_config = get_llm_config(user_id=normalized_user_id) if callable(get_llm_config) else None
+        graph_failures = 0
+        graphs_restored = 0
+        ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
+        for relative_path in self._collect_relative_file_paths(target=target, root=root):
+            source_path = self._resolve_child_path(root=root, relative_path=relative_path)
+            if not self._can_ingest_source_file(source_path):
+                continue
+            if ignore_matcher.is_ignored(relative_path, is_dir=False) and not self._is_managed_ingest_source(relative_path):
+                continue
+            frontmatter_path = (frontmatter_root / relative_path).with_suffix(".json").resolve()
+            if not self._is_relative_to(frontmatter_path, frontmatter_root) or not frontmatter_path.is_file():
+                graph_failures += 1
+                logger.error("恢复文件后缺少 frontmatter | path=%s", relative_path)
+                continue
+            try:
+                graph_result = self.knowledge_graph_service.extract_frontmatter_file(
+                    user_id=normalized_user_id,
+                    library_id=library_id,
+                    frontmatter_path=frontmatter_path,
+                    llm_config=llm_config,
+                )
+                if int(getattr(graph_result, "files_failed", 0)) > 0:
+                    graph_failures += 1
+                else:
+                    graphs_restored += 1
+            except Exception:
+                graph_failures += 1
+                logger.exception("恢复文件后重建图谱失败 | path=%s", relative_path)
+        return {
+            "artifacts_restored": graph_failures == 0,
+            "files_reingested": int(getattr(ingestion_result, "files_ingested", 0)),
+            "graphs_restored": graphs_restored,
+        }

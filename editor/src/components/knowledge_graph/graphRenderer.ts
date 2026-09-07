@@ -117,7 +117,7 @@ function hoverSpreadRatio(state: KnowledgeGraphRenderState): number {
   return clamp01(animation.elapsedMs / animation.durationMs)
 }
 
-function centerGlowProgress(state: KnowledgeGraphRenderState): number {
+function centerHighlightProgress(state: KnowledgeGraphRenderState): number {
   return easeOutCubic(hoverSpreadRatio(state) / 0.28)
 }
 
@@ -125,7 +125,7 @@ function edgeSpreadProgress(state: KnowledgeGraphRenderState): number {
   return clamp01((hoverSpreadRatio(state) - 0.18) / 0.52)
 }
 
-function neighborGlowProgress(state: KnowledgeGraphRenderState): number {
+function neighborHighlightProgress(state: KnowledgeGraphRenderState): number {
   return easeOutCubic((hoverSpreadRatio(state) - 0.68) / 0.32)
 }
 
@@ -145,31 +145,30 @@ function collectRelatedNodeIds(model: KnowledgeGraphModel, state: KnowledgeGraph
   return relatedNodeIds
 }
 
-function nodeGlowProgress(node: KnowledgeGraphNode, state: KnowledgeGraphRenderState, relatedNodeIds: Set<string>): number {
+function nodeHighlightProgress(node: KnowledgeGraphNode, state: KnowledgeGraphRenderState, relatedNodeIds: Set<string>): number {
   if (node.id === state.selectedNodeId) {
     return 1
   }
   if (!state.hoveredNodeId && state.selectedNodeId) {
-    // Selection glow: only the selected node itself glows, neighbors don't
+    // 仅选中节点改变轮廓，关联节点保持原样。
     return 0
   }
   if (!state.hoveredNodeId || !relatedNodeIds.has(node.id)) {
     return 0
   }
   if (node.id === state.hoveredNodeId) {
-    return centerGlowProgress(state)
+    return centerHighlightProgress(state)
   }
-  return neighborGlowProgress(state)
+  return neighborHighlightProgress(state)
 }
 
-function drawGlowCircle(
+function drawHighlightCircle(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   radius: number,
   color: string,
   progress: number,
-  theme: KnowledgeGraphRenderTheme,
   viewportScale: number,
 ) {
   if (progress <= 0) {
@@ -183,27 +182,10 @@ function drawGlowCircle(
   ctx.globalAlpha = 0.1 * progress
   ctx.fill()
   ctx.globalAlpha = 1
-  ctx.shadowColor = color
-  ctx.shadowBlur = (theme.isDark ? 10 + 10 * scaleProgress : 6 + 4 * scaleProgress) * progress
   ctx.strokeStyle = color
   ctx.lineWidth = 0.8 + 0.4 * progress
   ctx.stroke()
   ctx.restore()
-}
-
-function applyAmbientNodeGlow(
-  ctx: CanvasRenderingContext2D,
-  color: string,
-  theme: KnowledgeGraphRenderTheme,
-  viewportScale: number,
-) {
-  if (!theme.isDark) {
-    return
-  }
-  ctx.shadowColor = color
-  ctx.shadowBlur = 4 + 8 * clamp01(viewportScale)
-  ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 0
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, theme: KnowledgeGraphRenderTheme) {
@@ -253,14 +235,10 @@ function drawLink(
   ctx.moveTo(sourceX, sourceY)
   ctx.lineTo(targetX, targetY)
   ctx.strokeStyle = theme.edge
-  if (theme.isDark) {
-    // A restrained shared edge glow keeps compact nodes reading as one graph.
-    ctx.shadowColor = theme.edgeActive
-    ctx.shadowBlur = 2 + 3 * clamp01(state.viewport.scale)
-  }
   const bothEntity = source.kind === 'entity' && target.kind === 'entity'
   const oneEntity = source.kind === 'entity' || target.kind === 'entity'
-  ctx.lineWidth = bothEntity ? 0.6 : oneEntity ? 0.3 : 0.6
+  const zoomCompensation = 1 / Math.max(state.viewport.scale, 0.18)
+  ctx.lineWidth = (bothEntity ? 1.1 : oneEntity ? 0.9 : 1.1) * zoomCompensation
   ctx.stroke()
   ctx.restore()
   if (!touchesHovered || hoverProgress <= 0) {
@@ -272,21 +250,19 @@ function drawLink(
   const startY = spreadSource.y ?? spreadSource.targetY
   const endX = spreadTarget.x ?? spreadTarget.targetX
   const endY = spreadTarget.y ?? spreadTarget.targetY
-  const glowEndX = startX + (endX - startX) * hoverProgress
-  const glowEndY = startY + (endY - startY) * hoverProgress
+  const highlightEndX = startX + (endX - startX) * hoverProgress
+  const highlightEndY = startY + (endY - startY) * hoverProgress
   const hoverColor = nodeColor(spreadSource, theme)
   ctx.save()
   ctx.globalAlpha = 0.2 + 0.8 * hoverProgress
-  ctx.shadowColor = hoverColor
-  ctx.shadowBlur = (theme.isDark ? 30 : 10) * hoverProgress
   ctx.strokeStyle = hoverColor
   ctx.lineWidth = 0.8 + 0.9 * hoverProgress
   ctx.beginPath()
   ctx.moveTo(startX, startY)
-  ctx.lineTo(glowEndX, glowEndY)
+  ctx.lineTo(highlightEndX, highlightEndY)
   ctx.stroke()
   ctx.beginPath()
-  ctx.arc(glowEndX, glowEndY, 2.2 + 1.8 * hoverProgress, 0, Math.PI * 2)
+  ctx.arc(highlightEndX, highlightEndY, 2.2 + 1.8 * hoverProgress, 0, Math.PI * 2)
   ctx.fillStyle = hoverColor
   ctx.globalAlpha = 0.18 + 0.28 * hoverProgress
   ctx.fill()
@@ -304,19 +280,14 @@ function drawNode(
   const y = node.y ?? node.targetY
   const isSelected = node.id === state.selectedNodeId
   const isHovered = node.id === state.hoveredNodeId
-  const glowProgress = nodeGlowProgress(node, state, relatedNodeIds)
+  const highlightProgress = nodeHighlightProgress(node, state, relatedNodeIds)
   const hasActive = Boolean(state.hoveredNodeId || state.selectedNodeId)
   const isRelated = relatedNodeIds.has(node.id)
   const color = nodeColor(node, theme)
   ctx.save()
   ctx.globalAlpha = hasActive && !isRelated ? 0.38 : 1
-  if (glowProgress > 0) {
-    drawGlowCircle(ctx, x, y, node.radius, color, glowProgress, theme, state.viewport.scale)
-    ctx.shadowColor = color
-    const scaleProgress = clamp01(state.viewport.scale)
-    ctx.shadowBlur = (theme.isDark ? 6 + 8 * scaleProgress : 4 + 4 * scaleProgress) * (1 + 0.5 * glowProgress)
-  } else {
-    applyAmbientNodeGlow(ctx, color, theme, state.viewport.scale)
+  if (highlightProgress > 0) {
+    drawHighlightCircle(ctx, x, y, node.radius, color, highlightProgress, state.viewport.scale)
   }
   ctx.beginPath()
   ctx.arc(x, y, node.radius, 0, Math.PI * 2)
@@ -324,7 +295,7 @@ function drawNode(
     ctx.setLineDash([4, 3])
     ctx.fillStyle = theme.surface
     ctx.strokeStyle = color
-    ctx.lineWidth = 1.4 + 1.6 * glowProgress
+    ctx.lineWidth = 1.4 + 1.6 * highlightProgress
     ctx.fill()
     ctx.stroke()
   } else if (node.kind === 'library' || node.kind === 'root') {
@@ -342,24 +313,24 @@ function drawNode(
     ctx.beginPath()
     ctx.arc(x, y, node.radius, 0, Math.PI * 2)
     ctx.strokeStyle = color
-    ctx.lineWidth = 1.4 + 1.6 * glowProgress
+    ctx.lineWidth = 1.4 + 1.6 * highlightProgress
     ctx.stroke()
   } else {
     ctx.fillStyle = color
     ctx.fill()
-    if (glowProgress > 0 || isHovered || isSelected) {
+    if (highlightProgress > 0 || isHovered || isSelected) {
       ctx.strokeStyle = color
-      ctx.lineWidth = 1 + 2 * glowProgress
+      ctx.lineWidth = 1 + 2 * highlightProgress
       ctx.stroke()
     }
   }
-  if (glowProgress > 0) {
+  if (highlightProgress > 0) {
     ctx.beginPath()
     ctx.setLineDash([])
     ctx.arc(x, y, node.radius + 3 + 3 * clamp01(state.viewport.scale), 0, Math.PI * 2)
     ctx.strokeStyle = color
-    ctx.globalAlpha = isRelated ? glowProgress : hasActive ? 0.08 : 0.38
-    ctx.lineWidth = 0.8 + 0.4 * glowProgress
+    ctx.globalAlpha = isRelated ? highlightProgress : hasActive ? 0.08 : 0.38
+    ctx.lineWidth = 0.8 + 0.4 * highlightProgress
     ctx.stroke()
   }
   ctx.restore()

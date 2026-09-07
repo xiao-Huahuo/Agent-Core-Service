@@ -116,6 +116,16 @@ export interface KnowledgeTrashEntry {
   chunks_deleted?: number
 }
 
+/** Result of restoring source content and rebuilding all managed derivatives. */
+export interface KnowledgeTrashRestoreResult {
+  ok: boolean
+  restored_path: string
+  node: KnowledgeFileNode
+  artifacts_restored: boolean
+  files_reingested: number
+  graphs_restored: number
+}
+
 export interface LibraryAsset {
   asset_id: string
   mime_type: string

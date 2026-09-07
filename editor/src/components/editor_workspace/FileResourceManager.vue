@@ -461,16 +461,18 @@ function handleItemClick(node: KnowledgeFileNode, event: MouseEvent) {
     workspaceStore.selectTreeNode(node, { additive: true })
     return
   }
-  if (isMultiSelecting.value) {
+  if (multiSelectMode.value) {
     workspaceStore.selectTreeNode(node, { additive: true })
     return
   }
   workspaceStore.selectTreeNode(node)
-  if (!node.isDir) {
-    void workspaceStore.selectFile(node)
-    if (viewMode.value === 'content') {
-      void ensureSelectedPreview()
-    }
+  if (node.isDir) {
+    navigateToDirectory(node.path)
+    return
+  }
+  void workspaceStore.selectFile(node)
+  if (viewMode.value === 'content') {
+    void ensureSelectedPreview()
   }
 }
 
