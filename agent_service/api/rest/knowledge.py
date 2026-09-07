@@ -811,7 +811,7 @@ from agent_service.services.knowledge_graph import (
 async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
     """
     在后台启动语义知识图谱重建。
-    使用源文件的 source_hash 做增量标记，已抽取且未变更的文档自动跳过。
+    使用统一 ingestion_hash 和章节缓存增量处理，已抽取且未变更的内容自动跳过。
     """
     user_id = str(body.get("user_id") or "").strip()
     if not user_id:

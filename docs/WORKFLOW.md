@@ -577,7 +577,7 @@ flowchart TB
 
     subgraph persistence ["原子持久化"]
         clean_edges --> commit_graph["校验通过后原子替换"]
-        commit_graph --> graph_tables["节点、关系、章节缓存与状态"]
+        commit_graph --> graph_tables["节点、关系、章节缓存<br/>去重判定与状态"]
     end
 
     reuse_document --> done(["图谱可查询"])

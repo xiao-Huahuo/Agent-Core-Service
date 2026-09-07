@@ -365,6 +365,7 @@ class AgentConfig:
         model_connectivity_test_system_prompt: 小模型连通性测试使用的最小指令。
         knowledge_graph_extraction_system_prompt: 单段知识图谱实体与关系抽取规则。
         knowledge_graph_batch_system_prompt: 多章节批量知识图谱抽取规则。
+        knowledge_graph_adjudication_system_prompt: 知识图谱灰区候选联网裁决规则。
         knowledge_graph_dedup_system_prompt: 知识图谱全量实体聚类去重规则。
         knowledge_graph_incremental_dedup_system_prompt: 知识图谱增量实体对齐规则。
         """
@@ -531,6 +532,11 @@ class AgentConfig:
             "每章必须保留明确表达的实体—实体多跳关系链，不能只返回文档—实体关联。"
             "不要推理原文未表达的事实，只输出合法 JSON。"
             "输出结构固定为 {\"sections\":[{\"section_id\":\"...\",\"entities\":[],\"relations\":[]}]}。"
+        )
+        knowledge_graph_adjudication_system_prompt: str = (
+            "你是知识图谱灰区候选裁决器。输入只包含本地抽取器无法确定的候选和最短原文证据。"
+            "只保留能被证据直接支持的候选，不新增输入之外的实体或关系，不做延伸推理。"
+            "只输出合法 JSON，结构固定为 {\"entities\":[],\"relations\":[]}。"
         )
         knowledge_graph_dedup_system_prompt: str = (
             "你是实体语义去重器。对同一文档的实体候选做语义去重，将指代同一事物或概念的候选合并为规范实体。"
@@ -925,6 +931,12 @@ class AgentConfig:
         graph_batch_max_chars: 单批图谱抽取文本的最大字符数。
         graph_batch_max_sections: 单批图谱抽取允许合并的最大章节数。
         graph_dedup_max_cluster_size: 图谱聚类去重允许处理的最大簇大小。
+        graph_local_max_output_tokens: 本地图谱抽取单次最大输出 token 数。
+        graph_candidate_low_confidence: 图谱候选直接丢弃的最高置信度。
+        graph_candidate_high_confidence: 图谱候选无需联网即可接受的最低置信度。
+        graph_remote_evidence_chars: 灰区联网裁决允许发送的最大证据字符数。
+        graph_dedup_gray_similarity: 实体去重进入相似度灰区的最低阈值。
+        graph_dedup_high_similarity: 实体去重可本地自动合并的最低阈值。
         knowledge_content_search_limit: 知识文件内容搜索默认返回条数。
         knowledge_table_preview_rows: 知识库 CSV、TSV、XLSX 预览允许读取的最大行数。
         knowledge_trash_retention_days: 知识库回收站文件保留天数。
@@ -1125,6 +1137,12 @@ class AgentConfig:
         graph_batch_max_chars: int = 12000
         graph_batch_max_sections: int = 4
         graph_dedup_max_cluster_size: int = 500
+        graph_local_max_output_tokens: int = 1024
+        graph_candidate_low_confidence: float = 0.55
+        graph_candidate_high_confidence: float = 0.82
+        graph_remote_evidence_chars: int = 1200
+        graph_dedup_gray_similarity: float = 0.75
+        graph_dedup_high_similarity: float = 0.92
         knowledge_content_search_limit: int = 20
         knowledge_table_preview_rows: int = 200
         knowledge_trash_retention_days: int = 90

@@ -36,6 +36,7 @@ from agent_service.models.knowledge_graph import (
     KnowledgeGraphDocumentStatus,
     KnowledgeGraphEdge,
     KnowledgeGraphNode,
+    KnowledgeGraphSectionCache,
 )
 from agent_service.models.session import utc_now
 from agent_service.services.memory.rag.frontmatter_document import (
@@ -128,7 +129,7 @@ class RelationCandidate:
 
 
 class LLMKnowledgeGraphExtractor:
-    """使用小模型生成实体和关系候选。"""
+    """联网小模型适配器，生产主流程仅用它裁决灰区候选与去重。"""
 
     def __init__(
         self,
@@ -228,24 +229,60 @@ class LLMKnowledgeGraphExtractor:
             }
         return results
 
+    def adjudicate_candidates(
+        self,
+        *,
+        document: StructuredKnowledgeDocument,
+        section: StructuredKnowledgeSection,
+        candidates: dict[str, Any],
+        evidence_context: str,
+    ) -> dict[str, Any]:
+        """仅把灰区候选和最短证据交给联网小模型确认。"""
+
+        response = self.task_scheduler.invoke_chat(
+            task_type=BACKGROUND_FACT_RESOLUTION_TASK,
+            model_tier=SMALL_MODEL_TIER,
+            messages=[
+                SystemMessage(content=self.config.prompts.knowledge_graph_adjudication_system_prompt),
+                HumanMessage(content=(
+                    f"文档标题: {document.title}\n"
+                    f"section_id: {section.section_id}\n"
+                    f"灰区候选:\n{json.dumps(candidates, ensure_ascii=False)}\n"
+                    f"最短原文证据:\n{evidence_context}"
+                )),
+            ],
+            model_name=self._value("model_name"),
+            api_key=self._value("api_key"),
+            base_url=self._value("base_url"),
+            small_model_name=self._value("small_model_name"),
+            small_api_key=self._value("small_api_key"),
+            small_base_url=self._value("small_base_url"),
+            context_window_tokens=self._capacity_value("small_model_context_window_tokens"),
+            max_output_tokens=self._capacity_value("small_model_max_output_tokens"),
+        )
+        self._record_token_usage(response=response, document=document, section=section, event="gray_adjudicated")
+        return self._parse_json_object(str(response.content or ""))
+
     def _record_token_usage(
         self,
         *,
         response: Any,
         document: StructuredKnowledgeDocument,
         section: StructuredKnowledgeSection,
+        event: str = "section_extracted",
     ) -> None:
         """Persist graph extraction model usage as a non-session background call."""
 
         if not self.user_id:
             return
-        source_id = f"knowledge_graph_{self.library_id or 'default'}_{document.document_id}_{section.section_id}"
+        suffix = "" if event == "section_extracted" else f"_{event}"
+        source_id = f"knowledge_graph_{self.library_id or 'default'}_{document.document_id}_{section.section_id}{suffix}"
         self.token_usage_service.record_llm_response_token_usage(
             user_id=self.user_id,
             session_id=None,
             response=response,
             node="knowledge_graph",
-            event="section_extracted",
+            event=event,
             model_tier=SMALL_MODEL_TIER,
             source_id=source_id,
         )
@@ -659,7 +696,7 @@ def _batch_graph_sections(
 
 def _extract_graph_section_payloads(
     *,
-    extractor: LLMKnowledgeGraphExtractor,
+    extractor: KnowledgeGraphExtractor,
     document: StructuredKnowledgeDocument,
     max_workers: int,
     cancel_event: threading.Event | None,
@@ -711,6 +748,15 @@ def _extract_graph_section_payloads(
                 aggregate = payloads.setdefault(original_id, {"entities": [], "relations": []})
                 aggregate["entities"].extend(chunk_payload.get("entities", []))
                 aggregate["relations"].extend(chunk_payload.get("relations", []))
+                chunk_pending = chunk_payload.get("_pending_candidates", {})
+                if chunk_pending.get("entities") or chunk_pending.get("relations"):
+                    pending = aggregate.setdefault("_pending_candidates", {"entities": [], "relations": []})
+                    pending["entities"].extend(chunk_pending.get("entities", []))
+                    pending["relations"].extend(chunk_pending.get("relations", []))
+                    evidence = str(chunk_pending.get("evidence_context") or "").strip()
+                    if evidence:
+                        prior = str(pending.get("evidence_context") or "").strip()
+                        pending["evidence_context"] = "\n".join(item for item in (prior, evidence) if item)
             completed_sections += len(batch)
             completed_batches += 1
             on_progress(completed_sections, len(expanded_sections), completed_batches, len(batches))
@@ -917,13 +963,6 @@ def _run_graph_extraction(
 
     try:
         llm_config = _build_llm_config(config, user_llm_config=user_llm_config)
-        if not llm_config.get("small_api_key") or not llm_config.get("small_model_name"):
-            emit_progress(
-                status="failed",
-                message="模型配置不完整，无法进行 LLM 语义抽取。请在「模型设置」中至少配置大模型的模型名和 API Key；小模型留空时会自动继承大模型。",
-            )
-            return
-
         svc = KnowledgeGraphService(config=config)
         paths = sorted(path for path in frontmatter_dir.rglob("*.json") if path.is_file()) if frontmatter_dir.exists() else []
         if target_source_path is not None:
@@ -960,7 +999,7 @@ def _run_graph_extraction(
                 user_id=user_id,
                 library_id=library_id,
                 document_id=doc_data.document_id,
-                source_hash=doc_data.source_hash,
+                source_hash=doc_data.ingestion_hash,
             )
             if is_current and not force:
                 skipped_count += 1
@@ -990,13 +1029,23 @@ def _run_graph_extraction(
             library_id=library_id,
             frontmatter_dir=frontmatter_dir,
         )
-        print(f"  [同步] 文档节点同步完成, 开始 LLM 抽取\n")
+        print(f"  [同步] 文档节点同步完成, 开始本地优先抽取\n")
 
-        extractor = LLMKnowledgeGraphExtractor(
+        remote_adjudicator = (
+            LLMKnowledgeGraphExtractor(
+                config=config,
+                llm_config=llm_config,
+                user_id=user_id,
+                library_id=library_id,
+            )
+            if llm_config.get("small_model_name") and llm_config.get("small_api_key")
+            else None
+        )
+        from agent_service.services.knowledge_graph.local_extractor import LocalFirstKnowledgeGraphExtractor
+
+        extractor = LocalFirstKnowledgeGraphExtractor(
             config=config,
-            llm_config=llm_config,
-            user_id=user_id,
-            library_id=library_id,
+            remote_adjudicator=remote_adjudicator,
         )
         circuit_breaker_hit = False
         completed_count = 0
@@ -1035,18 +1084,19 @@ def _run_graph_extraction(
                   f"(sections: {len(document.sections)})")
 
             try:
-                svc.delete_document_graph(user_id=user_id, library_id=library_id, document_id=document.document_id)
-                svc._write_document_node(user_id=user_id, library_id=library_id, document=document)
                 entities_by_key: dict[tuple[str, str], EntityCandidate] = {}
                 relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
                 section_total = len(document.sections)
+                section_payloads: dict[str, dict[str, Any]] = {}
+                section_caches: list[KnowledgeGraphSectionCache] = []
+                has_pending = False
                 if section_total:
                     _set_graph_doc_progress(
                         docs[di],
                         status="processing",
                         progress=5,
                         stage="extract_sections",
-                        stage_label="LLM 并发语义抽取",
+                        stage_label="本地并发候选抽取",
                         stage_current=0,
                         stage_total=section_total,
                     )
@@ -1071,7 +1121,7 @@ def _run_graph_extraction(
                         status="processing",
                         progress=5 + int(completed_sections / total_sections * 70),
                         stage="extract_sections",
-                        stage_label="LLM 并发语义抽取",
+                        stage_label="本地并发候选抽取",
                         stage_current=completed_sections,
                         stage_total=total_sections,
                         message=f"已完成 {completed_batches}/{total_batches} 批请求",
@@ -1089,12 +1139,18 @@ def _run_graph_extraction(
                     )
 
                 try:
-                    section_payloads = _extract_graph_section_payloads(
+                    from agent_service.services.knowledge_graph.cache import extract_cached_graph_section_payloads
+
+                    section_payloads, section_caches, has_pending = extract_cached_graph_section_payloads(
+                        service=svc,
                         extractor=extractor,
+                        user_id=user_id,
+                        library_id=library_id,
                         document=document,
                         max_workers=config.task_schedule.background_fact_worker_count,
                         cancel_event=cancel_event,
                         on_progress=report_section_progress,
+                        force=force,
                     )
                 except GraphExtractionCancelled:
                     emit_progress(
@@ -1128,8 +1184,8 @@ def _run_graph_extraction(
                     )
                     print(f" entities={len(section_entities)} relations={len(section_relations)}")
 
-                # 语义去重: 合并不同 section 中同名但不同表述的实体
-                if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                # 本地规范名称和显式别名去重，不把整份实体列表发送到联网模型。
+                if entities_by_key:
                     _set_graph_doc_progress(
                         docs[di],
                         status="processing",
@@ -1145,9 +1201,14 @@ def _run_graph_extraction(
                         docs=docs,
                     )
                     entity_list = list(entities_by_key.values())
-                    dedup_result = extractor.deduplicate_entities(entity_list, document=document)
-                    merged_entities = dedup_result.get("entities", entity_list)
-                    name_mapping = dedup_result.get("name_mapping", {})
+                    merged_entities, name_mapping, document_dedup_pending = svc._deduplicate_document_entities_layered(
+                        user_id=user_id,
+                        library_id=library_id,
+                        entities=entity_list,
+                        extractor=extractor,
+                        document=document,
+                    )
+                    has_pending = has_pending or document_dedup_pending
                     if name_mapping:
                         entities_by_key = {
                             (svc._normalize_label(e.name), e.entity_type): e
@@ -1164,8 +1225,8 @@ def _run_graph_extraction(
                             remapped.append((relation, section))
                         relations = remapped
 
-                # 库级增量去重: embedding 检索 + 小模型裁决
-                if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                # 库级增量去重: 本地 Embedding 明确分流，仅灰区联网裁决。
+                if entities_by_key:
                     _set_graph_doc_progress(
                         docs[di],
                         status="processing",
@@ -1181,10 +1242,12 @@ def _run_graph_extraction(
                         docs=docs,
                     )
                     entity_list = list(entities_by_key.values())
-                    cross_mapping = svc._deduplicate_entities_incremental(
+                    cross_mapping, dedup_pending = svc._deduplicate_entities_incremental(
                         user_id=user_id, library_id=library_id,
                         new_entities=entity_list, extractor=extractor, document=document,
+                        return_pending_status=True,
                     )
+                    has_pending = has_pending or dedup_pending
                     if cross_mapping:
                         new_keyed: dict[tuple[str, str], EntityCandidate] = {}
                         for entity in entity_list:
@@ -1220,21 +1283,17 @@ def _run_graph_extraction(
                     message=f"正在写入知识图谱: {document.title}",
                     docs=docs,
                 )
-                written_entities, written_relations = svc._write_graph(
+                persistence_status = "partial" if has_pending else ("completed" if entities_by_key or relations else "skipped")
+                persistence_message = "gray candidates pending retry" if has_pending else ("" if entities_by_key or relations else "no valid graph candidates")
+                written_entities, written_relations = svc.replace_document_graph_atomic(
                     user_id=user_id,
                     library_id=library_id,
                     document=document,
                     entities=list(entities_by_key.values()),
                     relations=relations,
-                )
-                svc._write_status(
-                    user_id=user_id,
-                    library_id=library_id,
-                    document=document,
-                    status="completed" if written_entities or written_relations else "skipped",
-                    message="" if written_entities or written_relations else "no valid graph candidates",
-                    entity_count=written_entities,
-                    relation_count=written_relations,
+                    section_caches=section_caches,
+                    status=persistence_status,
+                    message=persistence_message,
                 )
                 if written_entities or written_relations:
                     completed_count += 1

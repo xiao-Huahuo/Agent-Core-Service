@@ -25,6 +25,7 @@ from agent_service.models.knowledge_graph import (
     KnowledgeGraphDocumentStatus,
     KnowledgeGraphEdge,
     KnowledgeGraphNode,
+    KnowledgeGraphSectionCache,
 )
 from agent_service.models.session import utc_now
 from agent_service.services.memory.rag.frontmatter_document import (
@@ -45,6 +46,48 @@ from agent_service.services.knowledge_graph.service import (
 )
 
 class KnowledgeGraphRepositoryMixin:
+    def list_section_caches(
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        document_id: str,
+    ) -> dict[str, KnowledgeGraphSectionCache]:
+        """返回单文档全部章节缓存并按稳定 section_id 建索引。"""
+
+        with Session(self.engine) as db:
+            rows = db.exec(
+                select(KnowledgeGraphSectionCache)
+                .where(KnowledgeGraphSectionCache.user_id == user_id)
+                .where(KnowledgeGraphSectionCache.library_id == library_id)
+                .where(KnowledgeGraphSectionCache.document_id == document_id)
+            ).all()
+            return {row.section_id: row for row in rows}
+
+    @staticmethod
+    def _replace_section_cache_rows(
+        *,
+        db: Session,
+        user_id: str,
+        library_id: str,
+        document_id: str,
+        caches: list[KnowledgeGraphSectionCache],
+    ) -> None:
+        """在调用方事务内替换缓存行。"""
+
+        retained = {cache.cache_id for cache in caches}
+        rows = db.exec(
+            select(KnowledgeGraphSectionCache)
+            .where(KnowledgeGraphSectionCache.user_id == user_id)
+            .where(KnowledgeGraphSectionCache.library_id == library_id)
+            .where(KnowledgeGraphSectionCache.document_id == document_id)
+        ).all()
+        for row in rows:
+            if row.cache_id not in retained:
+                db.delete(row)
+        for cache in caches:
+            db.merge(cache)
+
     def delete_entity_node(self, *, user_id: str, library_id: str, node_id: str) -> dict[str, int]:
         """Delete one owned entity node together with every incident edge."""
 
@@ -93,46 +136,67 @@ class KnowledgeGraphRepositoryMixin:
     def delete_document_graph(self, *, user_id: str, library_id: str, document_id: str) -> int:
         """删除单文档来源的图谱点边和状态。"""
 
-        document_node_id = self._document_node_id(user_id=user_id, library_id=library_id, document_id=document_id)
         with Session(self.engine) as db:
-            edge_ids = [
-                edge.edge_id
-                for edge in db.exec(
-                    select(KnowledgeGraphEdge)
-                    .where(KnowledgeGraphEdge.user_id == user_id)
-                    .where(KnowledgeGraphEdge.library_id == library_id)
-                    .where(KnowledgeGraphEdge.source_document_id == document_id)
-                ).all()
-            ]
-            edge_ids.extend(
-                edge.edge_id
-                for edge in db.exec(
-                    select(KnowledgeGraphEdge)
-                    .where(KnowledgeGraphEdge.user_id == user_id)
-                    .where(KnowledgeGraphEdge.library_id == library_id)
-                    .where(KnowledgeGraphEdge.source_node_id == document_node_id)
-                ).all()
+            deleted_edges = self._delete_document_graph_rows(
+                db=db,
+                user_id=user_id,
+                library_id=library_id,
+                document_id=document_id,
+                delete_status=True,
+                delete_cache=True,
             )
-            for edge_id in set(edge_ids):
-                edge = db.get(KnowledgeGraphEdge, edge_id)
-                if edge:
-                    db.delete(edge)
-            for node in db.exec(
-                select(KnowledgeGraphNode)
-                .where(KnowledgeGraphNode.user_id == user_id)
-                .where(KnowledgeGraphNode.library_id == library_id)
-                .where(KnowledgeGraphNode.document_id == document_id)
-            ).all():
-                db.delete(node)
-            self._delete_orphan_entity_nodes(db=db, user_id=user_id, library_id=library_id)
+            db.commit()
+            return deleted_edges
+
+    def _delete_document_graph_rows(
+        self,
+        *,
+        db: Session,
+        user_id: str,
+        library_id: str,
+        document_id: str,
+        delete_status: bool,
+        delete_cache: bool,
+    ) -> int:
+        """在调用方事务内删除单文档旧图及可选状态、缓存。"""
+
+        document_node_id = self._document_node_id(user_id=user_id, library_id=library_id, document_id=document_id)
+        edges = db.exec(
+            select(KnowledgeGraphEdge)
+            .where(KnowledgeGraphEdge.user_id == user_id)
+            .where(KnowledgeGraphEdge.library_id == library_id)
+            .where(or_(
+                KnowledgeGraphEdge.source_document_id == document_id,
+                KnowledgeGraphEdge.source_node_id == document_node_id,
+            ))
+        ).all()
+        for edge in edges:
+            db.delete(edge)
+        for node in db.exec(
+            select(KnowledgeGraphNode)
+            .where(KnowledgeGraphNode.user_id == user_id)
+            .where(KnowledgeGraphNode.library_id == library_id)
+            .where(KnowledgeGraphNode.document_id == document_id)
+        ).all():
+            db.delete(node)
+        db.flush()
+        self._delete_orphan_entity_nodes(db=db, user_id=user_id, library_id=library_id)
+        if delete_status:
             status = db.get(
                 KnowledgeGraphDocumentStatus,
                 self._status_id(user_id=user_id, library_id=library_id, document_id=document_id),
             )
             if status:
                 db.delete(status)
-            db.commit()
-            return len(set(edge_ids))
+        if delete_cache:
+            for cache in db.exec(
+                select(KnowledgeGraphSectionCache)
+                .where(KnowledgeGraphSectionCache.user_id == user_id)
+                .where(KnowledgeGraphSectionCache.library_id == library_id)
+                .where(KnowledgeGraphSectionCache.document_id == document_id)
+            ).all():
+                db.delete(cache)
+        return len(edges)
     def delete_graph_except_documents(
         self,
         *,
@@ -189,6 +253,83 @@ class KnowledgeGraphRepositoryMixin:
     ) -> tuple[int, int]:
         """写入文档节点、实体节点和关系边。"""
 
+        with Session(self.engine) as db:
+            result = self._write_graph_rows(
+                db=db,
+                user_id=user_id,
+                library_id=library_id,
+                document=document,
+                entities=entities,
+                relations=relations,
+            )
+            db.commit()
+            return result
+
+    def replace_document_graph_atomic(
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        document: StructuredKnowledgeDocument,
+        entities: list[EntityCandidate],
+        relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]],
+        section_caches: list[KnowledgeGraphSectionCache],
+        status: str,
+        message: str,
+    ) -> tuple[int, int]:
+        """在单个事务中替换旧图、章节缓存和文档状态。"""
+
+        with Session(self.engine) as db:
+            self._delete_document_graph_rows(
+                db=db,
+                user_id=user_id,
+                library_id=library_id,
+                document_id=document.document_id,
+                delete_status=False,
+                delete_cache=False,
+            )
+            written_entities, written_relations = self._write_graph_rows(
+                db=db,
+                user_id=user_id,
+                library_id=library_id,
+                document=document,
+                entities=entities,
+                relations=relations,
+            )
+            self._replace_section_cache_rows(
+                db=db,
+                user_id=user_id,
+                library_id=library_id,
+                document_id=document.document_id,
+                caches=section_caches,
+            )
+            db.merge(KnowledgeGraphDocumentStatus(
+                status_id=self._status_id(user_id=user_id, library_id=library_id, document_id=document.document_id),
+                user_id=user_id,
+                library_id=library_id,
+                document_id=document.document_id,
+                source_hash=document.ingestion_hash,
+                status=status,
+                message=message,
+                entity_count=written_entities,
+                relation_count=written_relations,
+                updated_at=utc_now(),
+            ))
+            db.commit()
+            return written_entities, written_relations
+
+    def _write_graph_rows(
+        self,
+        *,
+        db: Session,
+        user_id: str,
+        library_id: str,
+        document: StructuredKnowledgeDocument,
+        entities: list[EntityCandidate],
+        relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]],
+    ) -> tuple[int, int]:
+        """在调用方事务中写入文档节点、实体节点和关系边。"""
+
         now = utc_now()
         document_node_id = self._document_node_id(user_id=user_id, library_id=library_id, document_id=document.document_id)
         entity_node_ids: dict[str, str] = {}
@@ -201,95 +342,93 @@ class KnowledgeGraphRepositoryMixin:
         }
         if not document_entity_roots and entities:
             document_entity_roots.add(self._normalize_label(entities[0].name))
-        with Session(self.engine) as db:
-            db.merge(self._build_document_node(user_id=user_id, library_id=library_id, document=document, now=now))
-            for entity in entities:
-                node_id = self._entity_node_id(
+        db.merge(self._build_document_node(user_id=user_id, library_id=library_id, document=document, now=now))
+        for entity in entities:
+            node_id = self._entity_node_id(
+                user_id=user_id,
+                library_id=library_id,
+                entity_type=entity.entity_type,
+                label=entity.name,
+            )
+            entity_node_ids[entity.name] = node_id
+            entity_node_ids[self._normalize_label(entity.name)] = node_id
+            written_entity_node_ids.add(node_id)
+            db.merge(
+                KnowledgeGraphNode(
+                    node_id=node_id,
                     user_id=user_id,
                     library_id=library_id,
-                    entity_type=entity.entity_type,
+                    node_type="entity",
                     label=entity.name,
+                    normalized_label=self._normalize_label(entity.name),
+                    entity_type=entity.entity_type,
+                    document_id="",
+                    source_uri=document.source_uri,
+                    metadata_json={
+                        "aliases": entity.aliases,
+                        "description": entity.description,
+                        "confidence": entity.confidence,
+                    },
+                    created_at=now,
+                    updated_at=now,
                 )
-                entity_node_ids[entity.name] = node_id
-                entity_node_ids[self._normalize_label(entity.name)] = node_id
-                written_entity_node_ids.add(node_id)
-                db.merge(
-                    KnowledgeGraphNode(
-                        node_id=node_id,
-                        user_id=user_id,
-                        library_id=library_id,
-                        node_type="entity",
-                        label=entity.name,
-                        normalized_label=self._normalize_label(entity.name),
-                        entity_type=entity.entity_type,
-                        document_id="",
-                        source_uri=document.source_uri,
-                        metadata_json={
-                            "aliases": entity.aliases,
-                            "description": entity.description,
-                            "confidence": entity.confidence,
-                        },
-                        created_at=now,
-                        updated_at=now,
-                    )
+            )
+            if self._normalize_label(entity.name) in document_entity_roots:
+                db.merge(KnowledgeGraphEdge(
+                    edge_id=self._edge_id(
+                        user_id,
+                        library_id,
+                        document_node_id,
+                        node_id,
+                        "mentions",
+                        document.document_id,
+                        "",
+                    ),
+                    user_id=user_id,
+                    library_id=library_id,
+                    source_node_id=document_node_id,
+                    target_node_id=node_id,
+                    relation_type="mentions",
+                    weight=max(0.2, entity.confidence * 0.5),
+                    evidence="",
+                    source_document_id=document.document_id,
+                    source_section_id="",
+                    metadata_json={"edge_role": "document_entity"},
+                    created_at=now,
+                    updated_at=now,
+                ))
+        written_relations = 0
+        for relation, section in relations:
+            source_id = entity_node_ids.get(relation.source) or entity_node_ids.get(self._normalize_label(relation.source))
+            target_id = entity_node_ids.get(relation.target) or entity_node_ids.get(self._normalize_label(relation.target))
+            if not source_id or not target_id:
+                continue
+            db.merge(
+                KnowledgeGraphEdge(
+                    edge_id=self._edge_id(
+                        user_id,
+                        library_id,
+                        source_id,
+                        target_id,
+                        relation.relation_type,
+                        document.document_id,
+                        section.section_id,
+                    ),
+                    user_id=user_id,
+                    library_id=library_id,
+                    source_node_id=source_id,
+                    target_node_id=target_id,
+                    relation_type=relation.relation_type,
+                    weight=self._relation_weight(relation),
+                    evidence=relation.evidence,
+                    source_document_id=document.document_id,
+                    source_section_id=section.section_id,
+                    metadata_json={"title_path": section.title_path},
+                    created_at=now,
+                    updated_at=now,
                 )
-                if self._normalize_label(entity.name) in document_entity_roots:
-                    db.merge(KnowledgeGraphEdge(
-                        edge_id=self._edge_id(
-                            user_id,
-                            library_id,
-                            document_node_id,
-                            node_id,
-                            "mentions",
-                            document.document_id,
-                            "",
-                        ),
-                        user_id=user_id,
-                        library_id=library_id,
-                        source_node_id=document_node_id,
-                        target_node_id=node_id,
-                        relation_type="mentions",
-                        weight=max(0.2, entity.confidence * 0.5),
-                        evidence="",
-                        source_document_id=document.document_id,
-                        source_section_id="",
-                        metadata_json={"edge_role": "document_entity"},
-                        created_at=now,
-                        updated_at=now,
-                    ))
-            written_relations = 0
-            for relation, section in relations:
-                source_id = entity_node_ids.get(relation.source) or entity_node_ids.get(self._normalize_label(relation.source))
-                target_id = entity_node_ids.get(relation.target) or entity_node_ids.get(self._normalize_label(relation.target))
-                if not source_id or not target_id:
-                    continue
-                db.merge(
-                    KnowledgeGraphEdge(
-                        edge_id=self._edge_id(
-                            user_id,
-                            library_id,
-                            source_id,
-                            target_id,
-                            relation.relation_type,
-                            document.document_id,
-                            section.section_id,
-                        ),
-                        user_id=user_id,
-                        library_id=library_id,
-                        source_node_id=source_id,
-                        target_node_id=target_id,
-                        relation_type=relation.relation_type,
-                        weight=self._relation_weight(relation),
-                        evidence=relation.evidence,
-                        source_document_id=document.document_id,
-                        source_section_id=section.section_id,
-                        metadata_json={"title_path": section.title_path},
-                        created_at=now,
-                        updated_at=now,
-                    )
-                )
-                written_relations += 1
-            db.commit()
+            )
+            written_relations += 1
         return len(written_entity_node_ids), written_relations
     def _write_document_node(self, *, user_id: str, library_id: str, document: StructuredKnowledgeDocument) -> None:
         """Persist a document node before best-effort semantic extraction."""
@@ -412,6 +551,18 @@ class KnowledgeGraphRepositoryMixin:
         """生成稳定状态记录 ID。"""
 
         return cls._hashed_id("kgstat", user_id, library_id, document_id)
+    @classmethod
+    def _section_cache_id(
+        cls,
+        *,
+        user_id: str,
+        library_id: str,
+        document_id: str,
+        section_id: str,
+    ) -> str:
+        """生成稳定章节缓存 ID。"""
+
+        return cls._hashed_id("kgcache", user_id, library_id, document_id, section_id)
     @staticmethod
     def _hashed_id(prefix: str, *parts: str) -> str:
         """生成短 hash ID。"""

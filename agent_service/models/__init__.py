@@ -18,7 +18,7 @@ from agent_service.models.favorite import FavoriteRecord
 from agent_service.models.privacy import PrivacyRecord
 from agent_service.models.feedback import FeedbackRecord
 from agent_service.models.knowledge_ingestion_job import KnowledgeIngestionJobRecord
-from agent_service.models.knowledge_graph import KnowledgeGraphDocumentStatus, KnowledgeGraphEdge, KnowledgeGraphNode
+from agent_service.models.knowledge_graph import KnowledgeGraphDedupDecision, KnowledgeGraphDocumentStatus, KnowledgeGraphEdge, KnowledgeGraphNode, KnowledgeGraphSectionCache
 from agent_service.models.library import LibraryAsset, LibraryItem, LibraryItemTag, LibraryTag
 from agent_service.models.message import MessageBase, MessageRecord
 from agent_service.models.session import SessionBase, SessionRecord
@@ -50,8 +50,10 @@ __all__ = [
     "FeedbackRecord",
     "KnowledgeIngestionJobRecord",
     "KnowledgeGraphDocumentStatus",
+    "KnowledgeGraphDedupDecision",
     "KnowledgeGraphEdge",
     "KnowledgeGraphNode",
+    "KnowledgeGraphSectionCache",
     "LibraryAsset",
     "LibraryItem",
     "LibraryItemTag",

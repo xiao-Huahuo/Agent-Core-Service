@@ -49,7 +49,7 @@ test('shows responsive graph pipeline and section progress', async ({ page }) =>
       return route.fulfill({ json: {
         status: 'running', total: 2, current: 0, message: '文档 1/2 已抽取 2/5 个章节，完成 1/2 批请求',
         docs: [
-          { path: 'notes.md', name: 'notes', status: 'processing', progress: 45, stage: 'extract_sections', stage_label: 'LLM 并发语义抽取', stage_current: 2, stage_total: 5, message: '已完成 1/2 批请求' },
+          { path: 'notes.md', name: 'notes', status: 'processing', progress: 45, stage: 'extract_sections', stage_label: '本地并发候选抽取', stage_current: 2, stage_total: 5, message: '已完成 1/2 批请求' },
           { path: 'next.md', name: 'next', status: 'pending', progress: 0, stage: 'waiting', stage_label: '等待图谱抽取', stage_current: 0, stage_total: 3 },
         ],
       } })
@@ -61,12 +61,12 @@ test('shows responsive graph pipeline and section progress', async ({ page }) =>
 
   await page.goto('/')
   await page.locator('.topbar button[title="图谱抽取"]').click()
-  await expect(page.locator('.graph-progress-cell .progress-detail').first()).toContainText('LLM 并发语义抽取')
+  await expect(page.locator('.graph-progress-cell .progress-detail').first()).toContainText('本地并发候选抽取')
   await expect(page.getByText('2 / 5', { exact: false })).toBeVisible()
   await expect(page.getByText('D:\\Knowledge\\notes.md', { exact: true })).toBeVisible()
   await expect(page.getByText('D:\\Knowledge\\next.md', { exact: true })).toBeVisible()
   await expect(page.locator('.graph-progress .ingestion-progress-percent')).toHaveText('23%')
-  await expect(page.locator('.graph-progress-label')).toContainText('图谱 0/2 · LLM 并发语义抽取 2/5')
+  await expect(page.locator('.graph-progress-label')).toContainText('图谱 0/2 · 本地并发候选抽取 2/5')
   await expect.poll(() => graphPolls, { timeout: 1400 }).toBeGreaterThanOrEqual(2)
 })
 

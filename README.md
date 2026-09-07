@@ -800,12 +800,13 @@ Skill能力是从通用Agent走向专用Agent的关键。其设计如下：
 - **实体类型**: `person`,`organization`,`project`,`module`,`class`,`function`,`file`,`concept`,`config`,`data`,`other`。
 
 - **灌库模型**:
-  抽取结果写入 `runtime/db/relation/agent_service.db` 四张表:
+  抽取结果写入 `runtime/db/relation/agent_service.db` 五张表:
   - `knowledge_graph_nodes` — 全部节点(文档 + 实体)
   - `knowledge_graph_edges` — 全部边,分为两种:
     - **实体-实体边**:本地抽取器确认或联网模型裁决通过的语义关系,携带 `evidence`(原文短语)
     - **文档-实体边**:程序自动生成的 `mentions` 边,连接文档节点与该文档 section 中出现的所有实体,`weight` 由 entity confidence 决定
   - `knowledge_graph_section_cache` — 章节正文哈希、抽取器与规则版本、已确认结果和待重试灰区候选
+  - `knowledge_graph_dedup_decisions` — 已确认的实体对合并或保持独立判定,避免重复联网裁决
   - `knowledge_graph_document_status` — 每篇文档的抽取状态(completed/failed/skipped)
   图谱特点是**文档内通过有原文证据的语义关系进行关联,不同文档通过共享实体节点间接连接**,形成隐式的跨文档语义网络。抽取时不凭空推断跨文档关系,保证每篇文档的证据独立性,同时共享实体节点在外图中自然实现桥接。
   重建时按统一的 `ingestion_hash` 和章节正文哈希增量执行,已完成且未变化的文档直接跳过,变化文档只重新处理变化章节。

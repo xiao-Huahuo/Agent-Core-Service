@@ -26,6 +26,11 @@ from agent_service.core.db.engine import database_url
 logger = logging.getLogger(__name__)
 
 BASELINE_REVISION = "20260829_0001"
+POST_BASELINE_TABLES = {
+    "component_library_metadata",
+    "knowledge_graph_section_cache",
+    "knowledge_graph_dedup_decisions",
+}
 
 
 def build_alembic_config(config: AgentConfig) -> Config:
@@ -71,7 +76,7 @@ def _validate_legacy_schema(engine: Engine) -> None:
     """确认无版本旧库至少包含当前模型的全部业务表。"""
 
     actual_tables = set(inspect(engine).get_table_names())
-    expected_tables = set(SQLModel.metadata.tables)
+    expected_tables = set(SQLModel.metadata.tables) - POST_BASELINE_TABLES
     missing_tables = sorted(expected_tables - actual_tables)
     if missing_tables:
         raise RuntimeError(f"未知旧数据库结构，缺少业务表: {', '.join(missing_tables)}")

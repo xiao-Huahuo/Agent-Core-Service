@@ -43,6 +43,8 @@ from agent_service.services.knowledge_graph.service import (
     LLMKnowledgeGraphExtractor,
     RelationCandidate, StructuredKnowledgeDocument, StructuredKnowledgeSection,
 )
+from agent_service.services.knowledge_graph.local_extractor import LocalFirstKnowledgeGraphExtractor
+from agent_service.services.knowledge_graph.cache import extract_cached_graph_section_payloads
 
 logger = logging.getLogger(__name__)
 
@@ -66,19 +68,39 @@ class KnowledgeGraphExtractionMixin:
         ):
             result.files_skipped = 1
             return result
-        self.delete_document_graph(user_id=user_id, library_id=library_id, document_id=document.document_id)
-        self._write_document_node(user_id=user_id, library_id=library_id, document=document)
-        extractor = self.extractor or LLMKnowledgeGraphExtractor(
-            config=self.config,
-            llm_config=llm_config,
-            user_id=user_id,
-            library_id=library_id,
-        )
+        if self.extractor is not None:
+            extractor = self.extractor
+        else:
+            from agent_service.services.knowledge_graph.service import _build_llm_config
+
+            resolved_llm_config = _build_llm_config(self.config, user_llm_config=llm_config)
+            remote_adjudicator = (
+                LLMKnowledgeGraphExtractor(
+                    config=self.config,
+                    llm_config=resolved_llm_config,
+                    user_id=user_id,
+                    library_id=library_id,
+                )
+                if resolved_llm_config.get("small_model_name") and resolved_llm_config.get("small_api_key")
+                else None
+            )
+            extractor = LocalFirstKnowledgeGraphExtractor(
+                config=self.config,
+                remote_adjudicator=remote_adjudicator,
+            )
         try:
+            section_payloads, section_caches, has_pending = extract_cached_graph_section_payloads(
+                service=self,
+                extractor=extractor,
+                user_id=user_id,
+                library_id=library_id,
+                document=document,
+                max_workers=1,
+            )
             entities_by_key: dict[tuple[str, str], EntityCandidate] = {}
             relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
             for section in document.sections:
-                payload = extractor.extract(document=document, section=section)
+                payload = section_payloads.get(section.section_id, {"entities": [], "relations": []})
                 section_entities = self._sanitize_entities(payload.get("entities"))
                 for entity in section_entities:
                     entities_by_key[(self._normalize_label(entity.name), entity.entity_type)] = entity
@@ -95,79 +117,55 @@ class KnowledgeGraphExtractionMixin:
                 )
                 relations.extend((relation, section) for relation in section_relations)
 
-            # 语义去重: 合并不同 section 中同名但不同表述的实体
-            if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
-                entity_list = list(entities_by_key.values())
-                dedup_result = extractor.deduplicate_entities(entity_list, document=document)
-                merged_entities = dedup_result.get("entities", entity_list)
-                name_mapping = dedup_result.get("name_mapping", {})
-                if name_mapping:
-                    entities_by_key = {
-                        (self._normalize_label(e.name), e.entity_type): e
-                        for e in merged_entities
-                    }
-                    remapped: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
-                    for relation, section in relations:
-                        new_source = name_mapping.get(relation.source, relation.source)
-                        new_target = name_mapping.get(relation.target, relation.target)
-                        if new_source == new_target:
-                            continue
-                        relation.source = new_source
-                        relation.target = new_target
-                        remapped.append((relation, section))
-                    relations = remapped
+            entity_list, name_mapping, document_dedup_pending = self._deduplicate_document_entities_layered(
+                user_id=user_id,
+                library_id=library_id,
+                entities=list(entities_by_key.values()),
+                extractor=extractor,
+                document=document,
+            )
+            has_pending = has_pending or document_dedup_pending
+            entities_by_key, relations = self._remap_graph_candidates(
+                entities=entity_list,
+                relations=relations,
+                name_mapping=name_mapping,
+            )
 
-            # 库级增量去重: embedding 检索 + 小模型裁决,合并与库中已有同义实体
-            if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+            if entities_by_key:
                 entity_list = list(entities_by_key.values())
-                cross_mapping = self._deduplicate_entities_incremental(
+                cross_mapping, dedup_pending = self._deduplicate_entities_incremental(
                     user_id=user_id, library_id=library_id,
                     new_entities=entity_list, extractor=extractor, document=document,
+                    return_pending_status=True,
                 )
+                has_pending = has_pending or dedup_pending
                 if cross_mapping:
-                    new_keyed: dict[tuple[str, str], EntityCandidate] = {}
-                    for entity in entity_list:
-                        new_name = cross_mapping.get(entity.name, entity.name)
-                        if self._normalize_label(new_name) != self._normalize_label(entity.name):
-                            entity.name = new_name
-                        key = (self._normalize_label(entity.name), entity.entity_type)
-                        if key not in new_keyed or entity.confidence > new_keyed[key].confidence:
-                            new_keyed[key] = entity
-                    entities_by_key = new_keyed
-                    remapped: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
-                    for relation, section in relations:
-                        new_source = cross_mapping.get(relation.source, relation.source)
-                        new_target = cross_mapping.get(relation.target, relation.target)
-                        if new_source == new_target:
-                            continue
-                        relation.source = new_source
-                        relation.target = new_target
-                        remapped.append((relation, section))
-                    relations = remapped
+                    entities_by_key, relations = self._remap_graph_candidates(
+                        entities=entity_list,
+                        relations=relations,
+                        name_mapping=cross_mapping,
+                    )
 
-            written_entities, written_relations = self._write_graph(
+            status = "partial" if has_pending else ("completed" if entities_by_key or relations else "skipped")
+            message = "gray candidates pending retry" if has_pending else ("" if entities_by_key or relations else "no valid graph candidates")
+            written_entities, written_relations = self.replace_document_graph_atomic(
                 user_id=user_id,
                 library_id=library_id,
                 document=document,
                 entities=list(entities_by_key.values()),
                 relations=relations,
+                section_caches=section_caches,
+                status=status,
+                message=message,
             )
-            self._write_status(
-                user_id=user_id,
-                library_id=library_id,
-                document=document,
-                status="completed" if written_entities or written_relations else "skipped",
-                message="" if written_entities or written_relations else "no valid graph candidates",
-                entity_count=written_entities,
-                relation_count=written_relations,
-            )
-            result.files_extracted = 1 if written_entities or written_relations else 0
-            result.files_skipped = 0 if written_entities or written_relations else 1
+            result.files_extracted = 1 if written_entities or written_relations or has_pending else 0
+            result.files_skipped = 0 if result.files_extracted else 1
             result.entities_written = written_entities
             result.relations_written = written_relations
             return result
         except Exception as exc:
             logger.warning("知识图谱抽取失败 | document=%s error=%s", document.document_id, exc)
+            self._write_document_node(user_id=user_id, library_id=library_id, document=document)
             self._write_status(
                 user_id=user_id,
                 library_id=library_id,
@@ -179,6 +177,29 @@ class KnowledgeGraphExtractionMixin:
             )
             result.files_failed = 1
             return result
+
+    def _remap_graph_candidates(
+        self,
+        *,
+        entities: list[EntityCandidate],
+        relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]],
+        name_mapping: dict[str, str],
+    ) -> tuple[dict[tuple[str, str], EntityCandidate], list[tuple[RelationCandidate, StructuredKnowledgeSection]]]:
+        """应用规范实体名并同步重映射关系端点，清除产生的自环。"""
+
+        keyed: dict[tuple[str, str], EntityCandidate] = {}
+        for entity in entities:
+            entity.name = name_mapping.get(entity.name, entity.name)
+            key = (self._normalize_label(entity.name), entity.entity_type)
+            if key not in keyed or entity.confidence > keyed[key].confidence:
+                keyed[key] = entity
+        remapped: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
+        for relation, section in relations:
+            relation.source = name_mapping.get(relation.source, relation.source)
+            relation.target = name_mapping.get(relation.target, relation.target)
+            if self._normalize_label(relation.source) != self._normalize_label(relation.target):
+                remapped.append((relation, section))
+        return keyed, remapped
     def _sanitize_entities(self, raw_entities: Any) -> list[EntityCandidate]:
         """清洗模型返回实体候选。"""
 
