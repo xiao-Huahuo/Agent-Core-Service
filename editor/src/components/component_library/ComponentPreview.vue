@@ -10,6 +10,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import {
   buildComponentPreviewDocument,
+  canBuildComponentPreview,
   COMPONENT_PREVIEW_SIZE_MESSAGE,
 } from '@/components/component_library/componentPreview'
 import type { ComponentSourceFormat } from '@/types/componentLibrary'
@@ -31,15 +32,24 @@ const previewFrame = ref<HTMLIFrameElement | null>(null)
 
 /** Compile source and retain a readable error instead of breaking the parent page. */
 const preview = computed(() => {
+  if (!canBuildComponentPreview(props.source)) {
+    return {
+      document: '',
+      error: '源码超过 100 万字符，已关闭实时预览以保持界面流畅。',
+      failed: false,
+    }
+  }
   try {
     return {
       document: buildComponentPreviewDocument(props.source, props.sourceFormat),
       error: '',
+      failed: false,
     }
   } catch (error) {
     return {
       document: '',
       error: error instanceof Error ? error.message : '组件编译失败',
+      failed: true,
     }
   }
 })
@@ -74,8 +84,8 @@ onBeforeUnmount(() => window.removeEventListener('message', handlePreviewMessage
       scrolling="no"
       referrerpolicy="no-referrer"
     ></iframe>
-    <div v-else class="preview-error" role="status">
-      <span>编译失败</span>
+    <div v-else class="preview-error" :class="{ 'preview-skipped': !preview.failed }" role="status">
+      <span>{{ preview.failed ? '编译失败' : '预览已关闭' }}</span>
       <small>{{ preview.error }}</small>
     </div>
   </div>
@@ -111,5 +121,9 @@ onBeforeUnmount(() => window.removeEventListener('message', handlePreviewMessage
   max-width: 360px;
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
+}
+
+.preview-error.preview-skipped {
+  color: var(--color-text-muted);
 }
 </style>

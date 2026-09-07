@@ -56,6 +56,30 @@ describe('Component library API client', () => {
     })
   })
 
+  it('preserves component source beyond one MiB and one million characters', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ component: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const source = `<div>large</div><!--${'x'.repeat(1_100_000)}-->`
+
+    expect(source.length).toBeGreaterThan(1_000_000)
+    expect(new TextEncoder().encode(source).byteLength).toBeGreaterThan(1024 * 1024)
+
+    await createComponentLibraryItem({
+      user_id: 'u1',
+      source,
+      tag: 'cards',
+      filename: 'large.html',
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { source: string }
+    expect(body.source).toBe(source)
+  })
+
   it('uploads drawing-script language and its optional persisted cover reference', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ component: {} }), {

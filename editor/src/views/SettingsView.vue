@@ -71,8 +71,8 @@ const uiFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.uiFontFamil
 const textFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.textFontFamilies ?? [])])
 const uiFontSizePercentDraft = ref(settingsStore.profile.uiFontSizePercent ?? 100)
 const textFontSizePercentDraft = ref(settingsStore.profile.textFontSizePercent ?? 100)
-const themePrimaryColorDraft = ref(settingsStore.profile.themePrimaryColor || '#339cff')
-const themeSoftColorDraft = ref(settingsStore.profile.themeSoftColor || '#339cff')
+const themePrimaryColorDraft = ref(settingsStore.profile.themePrimaryColor || '#476bf7')
+const themeSoftColorDraft = ref(settingsStore.profile.themeSoftColor || '#476bf7')
 const graphNodeLimitDraft = ref(settingsStore.profile.graphNodeLimit ?? 2000)
 const availableFontFamilies = ref<string[]>([])
 const fontsLoading = ref(false)
@@ -158,12 +158,12 @@ watch(
 
 watch(
   () => settingsStore.profile.themePrimaryColor,
-  (value) => { themePrimaryColorDraft.value = value || '#339cff' },
+  (value) => { themePrimaryColorDraft.value = value || '#476bf7' },
 )
 
 watch(
   () => settingsStore.profile.themeSoftColor,
-  (value) => { themeSoftColorDraft.value = value || '#339cff' },
+  (value) => { themeSoftColorDraft.value = value || '#476bf7' },
 )
 
 async function loadAvailableFonts() {
@@ -289,8 +289,8 @@ async function handleResetThemeColors() {
   themeSoftColorDraft.value = ''
   handlePreviewThemeColors()
   await handleSaveThemeColors()
-  themePrimaryColorDraft.value = '#339cff'
-  themeSoftColorDraft.value = '#339cff'
+  themePrimaryColorDraft.value = '#476bf7'
+  themeSoftColorDraft.value = '#476bf7'
 }
 
 async function saveProfile() {

@@ -53,6 +53,45 @@ test('deleting a component removes it without a path-not-found error', async ({ 
   expect(listed.components.some((component) => component.component_id === created.component_id)).toBe(false)
 })
 
+test('upload UI persists a component beyond one MiB and one million characters', async ({ page }) => {
+  test.setTimeout(120_000)
+  const title = `component-large-source-${Date.now()}`
+  const source = `<div>Large source</div><!--${'x'.repeat(1_100_000)}-->`
+  expect(source.length).toBeGreaterThan(1_000_000)
+  expect(Buffer.byteLength(source, 'utf8')).toBeGreaterThan(1024 * 1024)
+
+  await page.goto('/')
+  await page.getByRole('textbox', { name: '用户 ID' }).fill('component-ui-smoke')
+  await page.getByRole('button', { name: '进入', exact: true }).click()
+  await page.getByRole('button', { name: '进入组件库', exact: true }).click()
+  await page.getByRole('button', { name: '上传组件', exact: true }).click()
+
+  await page.locator('.hidden-file-input').setInputFiles({
+    name: `${title}.html`,
+    mimeType: 'text/html',
+    buffer: Buffer.from(source),
+  })
+  await page.locator('.tag-field .library-tag-picker').getByTitle('选择已有标签').click()
+  await page.locator('.ui-dropdown-content').getByRole('menuitem', { name: 'cards', exact: true }).click()
+
+  const responsePromise = page.waitForResponse((response) => (
+    response.url().endsWith('/component-library/components')
+    && response.request().method() === 'POST'
+  ))
+  await page.locator('.upload-form').getByRole('button', { name: '上传组件', exact: true }).click()
+  const response = await responsePromise
+  expect(response.ok()).toBe(true)
+  const created = (await response.json() as { component: { component_id: string; source: string } }).component
+  seededComponentPaths.push(`components/${created.component_id}`)
+
+  expect(created.source).toBe(source)
+  await expect(page.locator('.upload-backdrop')).toHaveCount(0)
+  const card = page.getByRole('button', { name: `重命名 ${title}` }).locator('xpath=ancestor::article')
+  await expect(card).toBeVisible()
+  await expect(card.getByRole('status')).toContainText('预览已关闭')
+  await page.screenshot({ path: 'test-results/component-library-large-source.png', fullPage: true })
+})
+
 test('component library masonry, details, and live Vue upload preview work together', async ({ context, page }) => {
   test.setTimeout(90_000)
   const browserOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173').origin

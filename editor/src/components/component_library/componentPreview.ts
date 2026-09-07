@@ -20,6 +20,14 @@ import type { ComponentSourceFormat } from '@/types/componentLibrary'
 /** Message type emitted by sandbox documents when their rendered content changes size. */
 export const COMPONENT_PREVIEW_SIZE_MESSAGE = 'metaweave-component-preview-size'
 
+/** Keep million-character sources usable without compiling them on the browser main thread. */
+export const COMPONENT_PREVIEW_MAX_SOURCE_LENGTH = 1_000_000
+
+/** Return whether a source is small enough for responsive in-browser compilation. */
+export function canBuildComponentPreview(source: string): boolean {
+  return source.length <= COMPONENT_PREVIEW_MAX_SOURCE_LENGTH
+}
+
 const PREVIEW_CSP = [
   "default-src 'none'",
   "script-src 'unsafe-inline' blob:",

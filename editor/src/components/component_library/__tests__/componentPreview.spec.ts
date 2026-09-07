@@ -51,6 +51,20 @@ describe('component preview compiler', () => {
     )).toThrow('Only imports from vue are supported')
   })
 
+  it('keeps million-character sources responsive by skipping automatic compilation', () => {
+    const wrapper = mount(ComponentPreview, {
+      props: {
+        source: `<div>Large</div><!--${'x'.repeat(1_000_000)}-->`,
+        sourceFormat: 'html',
+        label: '大型组件',
+      },
+    })
+
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.get('[role="status"]').text()).toContain('预览已关闭')
+    expect(wrapper.get('[role="status"]').text()).toContain('超过 100 万字符')
+  })
+
   it('ignores viewport-coupled height reports that would grow a card forever', () => {
     const wrapper = mount(ComponentPreview, {
       props: {

@@ -11,7 +11,10 @@ import { computed, ref, watch } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import ComponentPreview from '@/components/component_library/ComponentPreview.vue'
-import { buildComponentPreviewDocument } from '@/components/component_library/componentPreview'
+import {
+  buildComponentPreviewDocument,
+  canBuildComponentPreview,
+} from '@/components/component_library/componentPreview'
 import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import { createComponentLibraryItem } from '@/api/componentLibrary'
@@ -142,7 +145,9 @@ async function submit(): Promise<void> {
         }]
     if (!drawingScriptMode.value) {
       uploads.forEach((upload) => {
-        buildComponentPreviewDocument(upload.source, detectSourceFormat(upload.source))
+        if (canBuildComponentPreview(upload.source)) {
+          buildComponentPreviewDocument(upload.source, detectSourceFormat(upload.source))
+        }
       })
     }
     saving.value = true

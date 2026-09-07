@@ -188,7 +188,28 @@ def test_create_component_rejects_unknown_tags_and_oversized_source(tmp_path: Pa
     with pytest.raises(ValueError, match="unsupported component tag"):
         service.create_component(user_id="u1", source="<button>OK</button>", tag="menus")
     with pytest.raises(ValueError, match="too large"):
-        service.create_component(user_id="u1", source="x" * 250_001, tag="any")
+        service.create_component(user_id="u1", source="x" * 2_000_001, tag="any")
+
+
+def test_component_source_can_exceed_one_mib_and_one_million_characters(tmp_path: Path) -> None:
+    """The canonical file flow must retain a source beyond both requested thresholds."""
+
+    service = _service(tmp_path)
+    source = f"<template><div>large</div></template><!--{'x' * 1_100_000}-->"
+
+    assert len(source) > 1_000_000
+    assert len(source.encode("utf-8")) > 1024 * 1024
+
+    created = service.create_component(
+        user_id="u1",
+        source=source,
+        tag="cards",
+        filename="large.vue",
+    )
+    listed = service.list_components(user_id="u1", tag="cards")
+
+    assert created["component"]["source"] == source
+    assert listed["components"] == [created["component"]]
 
 
 def test_component_crud_and_validation_share_the_canonical_source_file(tmp_path: Path) -> None:

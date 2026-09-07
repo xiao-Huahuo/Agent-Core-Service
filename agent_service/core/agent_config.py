@@ -1085,7 +1085,7 @@ class AgentConfig:
         checksum_short_chars: int = 8
         stable_event_hash_chars: int = 48
         feedback_content_max_length: int = 4000
-        component_source_max_length: int = 250000
+        component_source_max_length: int = 2000000
         component_schema_source_max_length: int = 2000000
         structured_source_max_length: int = 200000
         structured_fields_max_count: int = 64

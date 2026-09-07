@@ -31,8 +31,8 @@ const FLOATING_PIN_MODE_KEY = 'agent_editor_floating_pin_mode'
 
 const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
 const DEFAULT_TEXT_FONT_STACK = 'var(--font-text-default)'
-const DEFAULT_THEME_PRIMARY_COLOR = '#339cff'
-const DEFAULT_THEME_SOFT_COLOR = '#339cff'
+const DEFAULT_THEME_PRIMARY_COLOR = '#476bf7'
+const DEFAULT_THEME_SOFT_COLOR = '#476bf7'
 const APPEARANCE_PREVIEW_EVENT = 'metaweave:appearance-preview'
 
 const DEFAULT_PROFILE: UserSettingsProfile = {
