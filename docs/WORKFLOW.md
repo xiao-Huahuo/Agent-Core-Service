@@ -538,43 +538,65 @@ flowchart TD
 ##### 知识图谱实体提取
 
 ```mermaid
-flowchart TD
-    A["多模态入库"] --> B["Frontmatter JSON<br/>(知识库 .mw/frontmatter/*.json)"]
-    B --> C["POST /knowledge/graph/rebuild"]
-    C --> D["后台线程异步执行<br/>独立并发池(最大2并发)"]
-    D --> E{"遍历每篇 JSON 文档"}
-    E --> F{"按 source_hash<br/>是否已抽取?"}
-    F -->|"是"| G["跳过 skip"]
-    F -->|"否"| H["逐 section 调用用户配置的小模型"]
-    H --> I["输入: 文档标题 + section 文本(至多6000字)"]
-    I --> J["输出: entities + relations"]
-    J --> K["限流 sleep(0.5s/section)"]
-    K --> L["每文档后 sleep(1.0s)"]
-    L --> M["文档级实体合并<br/>按 (名称, 类型) 去重"]
-    M --> N["语义去重<br/>所有实体候选送小模型<br/>合并同义实体(AI=Artificial Intelligence)"]
-    N --> O["重映射关系边<br/>旧名→规范名"]
-    O --> P["写入 SQLite"]
-    P --> Q["knowledge_graph_nodes"]
-    P --> R["knowledge_graph_edges"]
-    P --> S["knowledge_graph_document_status"]
-    E --> T{"检测熔断<br/>(余额不足/配额超限)?"}
-    T -->|"是"| U["停止抽取,输出部分结果"]
-    T -->|"否"| E
+flowchart TB
+    accTitle: 本地优先的增量图谱抽取
+    accDescr: 文档先按文档和章节哈希复用已有结果，变化章节由本地模型抽取，仅将无法确定的最小证据片段交给联网模型裁决，最后本地去重并原子写入数据库。
 
-    subgraph manual_dedup["用户手动全库去重"]
-        V["图谱面板<br/>点击「去重」按钮"] --> W["POST /knowledge/graph/dedup"]
-        W --> X["读全部实体节点<br/>Embedding 向量化"]
-        X --> Y["DBSCAN 聚类<br/>(余弦距离 eps=0.5)"]
-        Y --> Z{"非单点簇<br/>(≥2 实体)?"}
-        Z -->|"是"| AA["逐簇喂给小模型<br/>判断同义并合并"]
-        Z -->|"否(噪声点)"| AB["跳过"]
-        AA --> AC["链式解析映射<br/>a→b, b→c → a→c"]
-        AC --> AD["更新 DB: 重定向边<br/>删除源节点,清理自环"]
+    start(["多模态文档已结构化"]) --> document_cache{"文档指纹未变化?"}
+    document_cache -->|"是"| reuse_document["复用整篇图谱"]
+    document_cache -->|"否"| section_cache{"章节缓存仍有效?"}
+
+    subgraph local_extract ["本地抽取与校验"]
+        section_cache -->|"是"| reuse_section["复用章节候选"]
+        section_cache -->|"否"| local_scan["本地模型扫描正文"]
+        local_scan --> local_rules["规则过滤与证据校验"]
+        local_rules --> confidence_route{"候选是否明确?"}
+        confidence_route -->|"高置信"| accepted_local["接受本地结果"]
+        confidence_route -->|"低置信"| discard_candidate["丢弃无证据候选"]
     end
 
-    P -.->|"全库去重<br/>操作对象"| X
+    subgraph remote_judge ["联网灰区裁决"]
+        confidence_route -->|"灰区"| minimal_context["组装最短证据片段"]
+        minimal_context --> remote_model["联网小模型裁决"]
+        remote_model --> accepted_remote["返回确定候选"]
+        remote_model -.->|"超时或熔断"| pending_retry["保留本地结果并待重试"]
+    end
+
+    subgraph local_dedup ["本地分层去重"]
+        reuse_section --> normalize_entities["规范名称与明确别名"]
+        accepted_local --> normalize_entities
+        accepted_remote --> normalize_entities
+        pending_retry --> normalize_entities
+        normalize_entities --> embedding_match["Embedding 相似候选检索"]
+        embedding_match --> dedup_route{"相似度是否明确?"}
+        dedup_route -->|"高或低"| remap_edges["本地合并或保持独立"]
+        dedup_route -->|"灰区"| dedup_remote["最小候选集联网裁决"]
+        dedup_remote --> remap_edges
+        remap_edges --> clean_edges["重映射并清理重复边"]
+    end
+
+    subgraph persistence ["原子持久化"]
+        clean_edges --> commit_graph["校验通过后原子替换"]
+        commit_graph --> graph_tables["节点、关系、章节缓存与状态"]
+    end
+
+    reuse_document --> done(["图谱可查询"])
+    discard_candidate --> normalize_entities
+    graph_tables --> done
+
+    classDef cache fill:#e8eefc,stroke:#476bf7,stroke-width:2px,color:#172554
+    classDef local fill:#ecfdf3,stroke:#16845b,stroke-width:2px,color:#12372a
+    classDef remote fill:#fff7db,stroke:#b7791f,stroke-width:2px,color:#4a2d08
+    classDef result fill:#f4f4f5,stroke:#52525b,stroke-width:2px,color:#18181b
+
+    class document_cache,section_cache,reuse_document,reuse_section cache
+    class local_scan,local_rules,accepted_local,discard_candidate,normalize_entities,embedding_match,dedup_route,remap_edges,clean_edges local
+    class confidence_route,minimal_context,remote_model,accepted_remote,pending_retry,dedup_remote remote
+    class start,commit_graph,graph_tables,done result
 
 ```
+
+流程中的联网模型不承担全文扫描。实体关系抽取和去重都先在本地完成确定性部分,联网请求只包含灰区候选及其最短证据。文档和章节缓存共同保证重复执行不产生费用,单段修改也不会触发整篇重算;联网服务不可用时,系统继续保存本地高置信结果并仅记录待重试候选。
 
 ### Agent 内置业务工具
 
