@@ -148,7 +148,7 @@ function graphStatus(node: KnowledgeFileNode) {
   gap: var(--space-8);
   padding: var(--space-8);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 17px;
   background: var(--color-canvas);
   color: var(--color-text);
   font: inherit;
