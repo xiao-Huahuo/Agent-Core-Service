@@ -1026,6 +1026,10 @@ class AgentConfig:
         web_fetch_timeout_seconds: 搜索结果正文抓取超时秒数。
         web_fetch_min_chars: 抓取正文过短时回退搜索摘要的字符阈值。
         download_timeout_seconds: 文件下载请求超时秒数。
+        scanner_source_max_bytes: 扫描器允许保存的单个源文件最大字节数。
+        scanner_web_max_bytes: 扫描器网页正文和单张远程图片的最大字节数。
+        scanner_worker_count: 扫描器后台解析线程数。
+        scanner_redirect_limit: 扫描器网页抓取允许跟随的最大重定向次数。
         tool_attachment_match_preview_count: 附件匹配歧义提示展示的最大候选数。
         tool_registry_description_chars: 工具清单中单项描述的最大字符数。
         tool_job_registry_max_entries: 内存工具任务注册表保留的最大条目数。
@@ -1232,6 +1236,10 @@ class AgentConfig:
         web_fetch_timeout_seconds: int = 15
         web_fetch_min_chars: int = 50
         download_timeout_seconds: int = 60
+        scanner_source_max_bytes: int = 100 * 1024 * 1024
+        scanner_web_max_bytes: int = 12 * 1024 * 1024
+        scanner_worker_count: int = 1
+        scanner_redirect_limit: int = 5
         tool_attachment_match_preview_count: int = 8
         tool_registry_description_chars: int = 100
         tool_job_registry_max_entries: int = 200

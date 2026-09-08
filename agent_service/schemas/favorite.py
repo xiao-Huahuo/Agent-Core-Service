@@ -16,7 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-FavoriteTargetType = Literal["knowledge_path", "library_item", "component", "session", "smart_form_row"]
+FavoriteTargetType = Literal["knowledge_path", "library_item", "component", "session", "smart_form_row", "scanner"]
 
 
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS

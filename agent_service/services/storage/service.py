@@ -22,6 +22,7 @@ STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
     "library_storage_dir": {"label": "图书馆存储路径", "parent": "managed_root", "can_clear": False, "requires_restart": False},
     "forms_dir": {"label": "智能表单资产", "parent": "managed_root", "can_clear": False, "requires_restart": False},
     "components_dir": {"label": "组件库", "parent": "managed_root", "can_clear": False, "requires_restart": False},
+    "scanner_dir": {"label": "扫描器历史", "parent": "managed_root", "can_clear": False, "requires_restart": False},
     "base_data_dir": {"label": "运行时数据", "parent": None, "can_clear": False, "requires_restart": False},
     "assets_dir": {"label": "受管资源", "parent": "base_data_dir", "can_clear": False, "requires_restart": False},
     "dsh_sdk_dir": {"label": "DeepSeek Harness SDK", "parent": "assets_dir", "can_clear": False, "requires_restart": False},
@@ -45,7 +46,7 @@ STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
 }
 
 # 虚拟节点 key（不对应实际 config.storage 属性）
-VIRTUAL_KEYS = {"models_dir", "db_dir", "latex_runtime_dir", "managed_root", "markdown_dir", "frontmatter_dir", "forms_dir", "components_dir"}
+VIRTUAL_KEYS = {"models_dir", "db_dir", "latex_runtime_dir", "managed_root", "markdown_dir", "frontmatter_dir", "forms_dir", "components_dir", "scanner_dir"}
 
 MANAGED_KNOWLEDGE_PATHS = {
     "managed_root": ".mw",
@@ -53,6 +54,7 @@ MANAGED_KNOWLEDGE_PATHS = {
     "frontmatter_dir": ".mw/frontmatter",
     "forms_dir": ".mw/forms",
     "components_dir": ".mw/components",
+    "scanner_dir": ".mw/scan",
     "latex_build_cache_dir": ".mw/latex",
 }
 

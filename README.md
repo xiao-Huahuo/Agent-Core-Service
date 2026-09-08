@@ -254,10 +254,11 @@ runtime/                                   # 应用运行时数据根目录
     ├── library/                    # 图书馆图书与集锦目录
     ├── forms/                      # 智能表格及其文献附件
     ├── components/                 # 组件库中的 Vue 与 HTML 文件
+    ├── scan/                       # 扫描器原文件、Markdown 草稿与解析资产
     └── latex/                      # LaTeX PDF、AUX、LOG 与 SyncTeX 编译缓存
 ```
 
-`md/`、`frontmatter/` 和 `assets/` 主要由原文件派生，必要时可以重新灌库生成；`library/`、`forms/` 和 `components/` 包含用户管理的业务内容，备份知识库时应与原始文件一起保留。切换活动知识库时，应用使用的 `.mw/` 也随之切换。
+`md/`、`frontmatter/` 和 `assets/` 主要由原文件派生，必要时可以重新灌库生成；`library/`、`forms/`、`components/` 和 `scan/` 包含用户管理的业务内容，备份知识库时应与原始文件一起保留。切换活动知识库时，应用使用的 `.mw/` 也随之切换。
 
 ## 详细功能设计
 

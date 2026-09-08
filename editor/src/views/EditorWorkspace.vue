@@ -38,6 +38,7 @@ const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspa
 const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.vue'))
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
+const ScannerView = defineAsyncComponent(() => import('@/views/ScannerView.vue'))
 const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue'))
 const ComponentLibraryView = defineAsyncComponent(() => import('@/views/ComponentLibraryView.vue'))
 const VaultView = defineAsyncComponent(() => import('@/views/VaultView.vue'))
@@ -485,6 +486,16 @@ function openIngestion() {
   }
 }
 
+/** Opens the persistent scanner workspace. */
+function openScanner() {
+  const next = workspaceStore.mainView === 'scanner' ? 'editor' : 'scanner'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openVisualization() {
   const next = workspaceStore.mainView === 'visualization' ? 'editor' : 'visualization'
   workspaceStore.setMainView(next)
@@ -785,6 +796,7 @@ watch(
         :forms-active="workspaceStore.mainView === 'forms'"
         :literature-active="workspaceStore.mainView === 'literature-reading'"
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
+        :scanner-active="workspaceStore.mainView === 'scanner'"
         :visualization-active="workspaceStore.mainView === 'visualization'"
         :agent-active="workspaceStore.mainView === 'agent'"
         :agent-queue-active="workspaceStore.mainView === 'agent-queue'"
@@ -809,6 +821,7 @@ watch(
         @open-forms="openForms"
         @open-literature="openLiterature"
         @open-ingestion="openIngestion"
+        @open-scanner="openScanner"
         @open-visualization="openVisualization"
         @toggle-agent="openAgentPage"
         @open-agent-queue="openAgentQueue"
@@ -880,6 +893,7 @@ watch(
         />
         <LiteratureReadingView v-else-if="workspaceStore.mainView === 'literature-reading'" class="main-shell-content" />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
+        <ScannerView v-else-if="workspaceStore.mainView === 'scanner'" class="main-shell-content" />
         <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />
         <AgentPage
           v-else-if="workspaceStore.mainView === 'agent'"

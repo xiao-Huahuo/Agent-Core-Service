@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
   openPath: (path) => ipcRenderer.invoke('shell:open-path', path),
   showItemInFolder: (path) => ipcRenderer.invoke('shell:show-item-in-folder', path),
   selectDirectory: () => ipcRenderer.invoke('dialog:select-directory'),
+  saveFileAs: (payload) => ipcRenderer.invoke('dialog:save-file', payload),
   copyFilePaths: (paths, mode) => ipcRenderer.invoke('clipboard:write-files', paths, mode),
   readClipboardFiles: () => ipcRenderer.invoke('clipboard:read-files'),
   readClipboardFilePaths: async () => {

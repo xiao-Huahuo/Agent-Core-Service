@@ -17,6 +17,7 @@ interface AgentEditorDesktopApi {
   close: () => void
   openExternal: (url: string) => Promise<void>
   selectDirectory: () => Promise<string>
+  saveFileAs: (payload: { filename: string; data: ArrayBuffer }) => Promise<string>
   copyFilePaths: (paths: string[], mode: 'copy' | 'cut') => Promise<boolean>
   readClipboardFiles: () => Promise<{ mode: 'copy' | 'cut'; paths: string[] }>
   readClipboardFilePaths: () => Promise<string[]>

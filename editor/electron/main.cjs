@@ -43,6 +43,7 @@ const disposeBrowserView = registerBrowserViewIpc(ipcMain, () => mainWindow)
 
 const MAIN_MIN_WIDTH = 320
 const MAIN_MIN_HEIGHT = 620
+const MAIN_WINDOW_RADIUS = 28
 
 /** Resolve the window that owns a given IPC event, falling back to mainWindow. */
 function windowFromEvent(event) {
@@ -520,7 +521,7 @@ function createMainWindow() {
     if (mainWindow.isMaximized()) {
       mainWindow.setShape([])
     } else {
-      applyTransparentShape(mainWindow)
+      applyTransparentShape(mainWindow, MAIN_WINDOW_RADIUS)
     }
   }
 
@@ -588,20 +589,46 @@ function createMainWindow() {
 const FLOATING_DEFAULT_WIDTH = 460
 const FLOATING_DEFAULT_HEIGHT = 172
 const FLOATING_CHAT_HEIGHT = 600
+const FLOATING_WINDOW_SHAPE_INSET = 10
+const FLOATING_WINDOW_SHAPE_RADIUS = 38
 
 // Windows 透明无边框窗口在矩形边缘仍会残留一条 1px 边框线(暗色下可见,
 // 直角的、紧贴窗口矩形)。thickFrame: false 对这种 DWM/Chromium 绘制无效。
 // 用 setShape 把窗口绘制区域内缩 1px,从原生层直接裁掉这条线。
-// 悬浮窗卡片是 20px margin、阴影最大扩散 10px;主窗口内容四周有留白,
-// 内缩 1px 不会影响任何内容。
-function applyTransparentShape(win) {
+// 主窗口传入与 CSS 一致的圆角半径;悬浮窗额外内缩到阴影外沿,
+// 既从原生层排除透明裁角区域,又保留卡片阴影的完整绘制范围。
+function applyTransparentShape(win, radius = 0, boundsInset = 0) {
   if (process.platform !== 'win32' || !win || win.isDestroyed()) {
     return
   }
   const [width, height] = win.getSize()
-  win.setShape([
-    { x: 1, y: 1, width: Math.max(width - 2, 1), height: Math.max(height - 2, 1) },
-  ])
+  const safeBoundsInset = Math.max(0, Math.floor(boundsInset))
+  const edgeInset = Math.max(1, safeBoundsInset)
+  const maxRadius = Math.max(0, Math.floor(Math.min(width, height) / 2) - safeBoundsInset)
+  const safeRadius = Math.max(0, Math.min(Math.floor(radius), maxRadius))
+  if (safeRadius === 0) {
+    win.setShape([{
+      x: edgeInset,
+      y: edgeInset,
+      width: Math.max(width - edgeInset * 2, 1),
+      height: Math.max(height - edgeInset * 2, 1),
+    }])
+    return
+  }
+  const centerOffset = safeBoundsInset + safeRadius
+  const shape = [{
+    x: edgeInset,
+    y: centerOffset,
+    width: Math.max(width - edgeInset * 2, 1),
+    height: Math.max(height - centerOffset * 2, 1),
+  }]
+  for (let y = edgeInset; y < centerOffset; y += 1) {
+    const distanceY = centerOffset - y - 0.5
+    const insetX = Math.max(edgeInset, Math.ceil(centerOffset - Math.sqrt(safeRadius ** 2 - distanceY ** 2) - 0.5))
+    const row = { x: insetX, width: Math.max(width - insetX * 2, 1), height: 1 }
+    shape.push({ ...row, y }, { ...row, y: height - y - 1 })
+  }
+  win.setShape(shape)
 }
 
 function boundsForMainResize(session, screenX, screenY) {
@@ -656,7 +683,7 @@ function createFloatingWindow() {
 
   floatingWindow.once('ready-to-show', () => {
     floatingWindow.setBackgroundColor('#00000000')
-    applyTransparentShape(floatingWindow)
+    applyTransparentShape(floatingWindow, FLOATING_WINDOW_SHAPE_RADIUS, FLOATING_WINDOW_SHAPE_INSET)
   })
 
   // Close hides the floating window instead of destroying it.
@@ -796,7 +823,7 @@ ipcMain.handle('window:begin-move', (event, payload) => {
     offsetX: restore.offsetX,
     offsetY: restore.offsetY,
   }
-  applyTransparentShape(win)
+  applyTransparentShape(win, MAIN_WINDOW_RADIUS)
   return true
 })
 
@@ -819,7 +846,7 @@ ipcMain.on('window:move-to', (event, payload) => {
 ipcMain.on('window:end-move', (event) => {
   if (mainMoveSession?.webContentsId === event.sender.id) {
     mainMoveSession = null
-    applyTransparentShape(mainWindow)
+    applyTransparentShape(mainWindow, MAIN_WINDOW_RADIUS)
   }
 })
 
@@ -854,7 +881,7 @@ ipcMain.on('window:resize-to', (event, payload) => {
     return
   }
   win.setBounds(boundsForMainResize(mainResizeSession, screenX, screenY))
-  applyTransparentShape(win)
+  applyTransparentShape(win, MAIN_WINDOW_RADIUS)
 })
 
 ipcMain.on('window:end-resize', (event) => {
@@ -912,6 +939,27 @@ ipcMain.handle('dialog:select-directory', async (event) => {
     return ''
   }
   return result.filePaths[0]
+})
+
+ipcMain.handle('dialog:save-file', async (event, payload) => {
+  const win = windowFromEvent(event)
+  const filename = path.basename(String(payload?.filename || 'scanner-export'))
+  const data = payload?.data
+  if (!win || !data || typeof data.byteLength !== 'number') {
+    return ''
+  }
+  const extension = path.extname(filename).toLowerCase()
+  const result = await dialog.showSaveDialog(win, {
+    defaultPath: filename,
+    filters: extension === '.zip'
+      ? [{ name: 'ZIP 压缩包', extensions: ['zip'] }]
+      : [{ name: 'Markdown', extensions: ['md'] }],
+  })
+  if (result.canceled || !result.filePath) {
+    return ''
+  }
+  await fs.promises.writeFile(result.filePath, Buffer.from(data))
+  return result.filePath
 })
 
 ipcMain.handle('clipboard:write-text', async (_event, text) => {
@@ -996,7 +1044,7 @@ ipcMain.handle('floating:set-bounds', (event, size) => {
   const bounds = win.getBounds()
   win.setBounds({ x: bounds.x, y: bounds.y, width, height })
   // setShape 区域是绝对像素,窗口 resize 后必须重新套用,否则边缘线会回来
-  applyTransparentShape(floatingWindow)
+  applyTransparentShape(floatingWindow, FLOATING_WINDOW_SHAPE_RADIUS, FLOATING_WINDOW_SHAPE_INSET)
   return true
 })
 

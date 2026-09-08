@@ -33,6 +33,7 @@ from agent_service.services.memory.retrieval_service import MemoryRetrievalServi
 from agent_service.services.message.service import MessageService
 from agent_service.services.model_management.service import ModelManagementService
 from agent_service.services.privacy.service import PrivacyService
+from agent_service.services.scanner import ScannerService
 from agent_service.services.session_attachment.service import SessionAttachmentService
 from agent_service.services.session.service import SessionService
 from agent_service.services.settings.service import SettingsService
@@ -195,6 +196,12 @@ def _require_favorite_service() -> FavoriteService:
     """返回当前请求的 FavoriteService。"""
 
     return _require("favorite_service", "FavoriteService")
+
+
+def _require_scanner_service() -> ScannerService:
+    """返回当前请求的 ScannerService。"""
+
+    return _require("scanner_service", "ScannerService")
 
 
 def _require_privacy_service() -> PrivacyService:

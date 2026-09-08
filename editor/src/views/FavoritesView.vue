@@ -12,6 +12,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
 import FavoriteSessionList from '@/components/editor_workspace/agent_chat/FavoriteSessionList.vue'
+import ScannerFavoritesPanel from '@/components/scanner_view/ScannerFavoritesPanel.vue'
 import ComponentLibraryView from '@/views/ComponentLibraryView.vue'
 import LibraryView from '@/views/LibraryView.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -25,7 +26,7 @@ const props = withDefaults(defineProps<{
   privacyMode: false,
 })
 
-type FavoriteTab = 'files' | 'library' | 'components' | 'sessions'
+type FavoriteTab = 'files' | 'library' | 'components' | 'sessions' | 'scanner'
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
@@ -37,6 +38,7 @@ const favoriteTabs: Array<{ value: FavoriteTab; label: string; icon: string }> =
   { value: 'library', label: '图书馆', icon: 'book' },
   { value: 'components', label: '组件', icon: 'grid-view' },
   { value: 'sessions', label: '会话', icon: 'forum' },
+  { value: 'scanner', label: '扫描器', icon: 'document' },
 ]
 const tabs = computed(() => props.privacyMode ? favoriteTabs.slice(0, 2) : favoriteTabs)
 
@@ -88,7 +90,8 @@ onMounted(updateSlider)
       <FileResourceManager v-if="activeTab === 'files'" :favorites-only-locked="!privacyMode" :privacy-only-locked="privacyMode" />
       <LibraryView v-else-if="activeTab === 'library'" :favorites-only-locked="!privacyMode" :privacy-only-locked="privacyMode" />
       <ComponentLibraryView v-else-if="activeTab === 'components'" favorites-only-locked />
-      <FavoriteSessionList v-else :user-id="settingsStore.profile.userId" @select="openAgentSession" />
+      <FavoriteSessionList v-else-if="activeTab === 'sessions'" :user-id="settingsStore.profile.userId" @select="openAgentSession" />
+      <ScannerFavoritesPanel v-else />
     </main>
   </section>
 </template>

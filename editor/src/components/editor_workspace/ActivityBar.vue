@@ -29,6 +29,7 @@ const props = defineProps<{
   formsActive: boolean
   literatureActive: boolean
   ingestionActive: boolean
+  scannerActive?: boolean
   visualizationActive: boolean
   agentActive: boolean
   agentQueueActive: boolean
@@ -55,6 +56,7 @@ const emit = defineEmits<{
   openForms: []
   openLiterature: []
   openIngestion: []
+  openScanner: []
   openVisualization: []
   toggleAgent: []
   openAgentQueue: []
@@ -94,6 +96,7 @@ const knowledgeActive = computed(() => (
   || props.vaultActive
   || props.formsActive
   || props.literatureActive
+  || props.scannerActive
 ))
 const entertainmentActive = computed(() => props.visualizationActive || props.agentQueueActive)
 const mineActive = computed(() => props.favoritesActive || props.privacyActive || props.feedbackOpen)
@@ -338,6 +341,18 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeActivityM
           >
             <IcIcon class="library-entry-icon library-color-literature" name="document" :size="18" />
             <span class="activity-label">文献阅读</span>
+          </button>
+          <button
+            class="activity-button"
+            :class="{ active: scannerActive }"
+            type="button"
+            title="扫描器"
+            aria-label="扫描器"
+            @mousedown.prevent="handleRipple"
+            @click="emit('openScanner'); closeActivityMenu()"
+          >
+            <IcIcon class="library-entry-icon" name="document" :size="18" />
+            <span class="activity-label">扫描器</span>
           </button>
         </div>
       </Transition>

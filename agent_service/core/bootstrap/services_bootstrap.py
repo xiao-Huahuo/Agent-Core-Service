@@ -38,6 +38,7 @@ from agent_service.services.memory.retrieval_service import MemoryRetrievalServi
 from agent_service.services.message.service import MessageService
 from agent_service.services.model_management.service import ModelManagementService
 from agent_service.services.privacy.service import PrivacyService
+from agent_service.services.scanner import ScannerService
 from agent_service.services.session_attachment.service import SessionAttachmentService
 from agent_service.services.session.service import SessionService
 from agent_service.services.settings.service import SettingsService
@@ -81,6 +82,7 @@ class ApplicationServices:
     unified_search_service: UnifiedSearchService
     vault_service: VaultService
     favorite_service: FavoriteService
+    scanner_service: ScannerService
     privacy_service: PrivacyService
     feedback_service: FeedbackService
     activity_service: ActivityService
@@ -109,6 +111,7 @@ class ApplicationServices:
 
         self.automation_scheduler.shutdown()
         self.knowledge_ingestion_job_service.stop()
+        self.scanner_service.stop()
         self.knowledge_graph_queue_service.stop()
         self.agent_queue_scheduler.shutdown()
         self.dsh_executor.shutdown()
@@ -188,6 +191,12 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
     )
     vault_service = VaultService(config=config, engine=settings_service.engine)
     favorite_service = FavoriteService(engine=database_engine, create_tables=False)
+    scanner_service = ScannerService(
+        engine=database_engine,
+        config=config,
+        settings_service=settings_service,
+        knowledge_library_service=knowledge_library_service,
+    )
     privacy_service = PrivacyService(engine=database_engine, create_tables=False)
     feedback_service = FeedbackService(engine=database_engine, create_tables=False)
     smart_form_service = SmartFormService(engine=database_engine, create_tables=False)
@@ -266,6 +275,7 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         unified_search_service=unified_search_service,
         vault_service=vault_service,
         favorite_service=favorite_service,
+        scanner_service=scanner_service,
         privacy_service=privacy_service,
         feedback_service=feedback_service,
         activity_service=activity_service,

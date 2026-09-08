@@ -23,7 +23,7 @@ from agent_service.models.favorite import FavoriteRecord
 from agent_service.schemas.favorite import FavoriteCreate, FavoriteOut, FavoriteTargetType
 
 
-VALID_TARGET_TYPES = {"knowledge_path", "library_item", "component", "session", "smart_form_row"}
+VALID_TARGET_TYPES = {"knowledge_path", "library_item", "component", "session", "smart_form_row", "scanner"}
 
 
 class FavoriteService:
@@ -157,7 +157,7 @@ class FavoriteService:
 
         normalized = value.strip()
         if normalized not in VALID_TARGET_TYPES:
-            raise ValueError("target_type must be knowledge_path, library_item, component, session, or smart_form_row")
+            raise ValueError("unsupported favorite target_type")
         return normalized  # type: ignore[return-value]
 
     @staticmethod

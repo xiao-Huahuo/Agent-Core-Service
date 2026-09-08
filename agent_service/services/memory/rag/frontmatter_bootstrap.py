@@ -217,6 +217,39 @@ class FrontmatterBootstrapService:
             result=result,
         )
 
+    def build_markdown_projection(
+        self,
+        *,
+        source_path: Path,
+        knowledge_dir: Path,
+        asset_output_dir: Path | None = None,
+        asset_public_prefix: str = "",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> StructuredKnowledgeDocument:
+        """Build the reusable pre-embedding Markdown projection for one source.
+
+        Scanner and ingestion callers share the same parsing implementation;
+        scanner callers may select a task-local asset directory and stop before
+        frontmatter persistence, chunking, and embedding.
+        """
+
+        resolved_source = source_path.expanduser().resolve()
+        resolved_root = knowledge_dir.expanduser().resolve()
+        try:
+            relative_path = resolved_source.relative_to(resolved_root)
+        except ValueError as exc:
+            raise ValueError("source file escapes knowledge_dir") from exc
+        if not resolved_source.is_file():
+            raise ValueError("source file not found")
+        return self._build_document(
+            source_path=resolved_source,
+            source_hash=self._hash_file(resolved_source),
+            knowledge_dir=resolved_root,
+            progress_callback=progress_callback,
+            asset_output_dir=asset_output_dir,
+            asset_public_prefix=asset_public_prefix,
+        )
+
         self._emit_stage_progress(
             progress_callback,
             relative_path=relative_path,
@@ -347,6 +380,8 @@ class FrontmatterBootstrapService:
         source_hash: str,
         knowledge_dir: Path,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        asset_output_dir: Path | None = None,
+        asset_public_prefix: str = "",
     ) -> StructuredKnowledgeDocument:
         """
         将单个原始知识文件转换为统一结构化文档。
@@ -401,13 +436,13 @@ class FrontmatterBootstrapService:
             summary = ""
         else:
             asset_relative_dir = Path(".mw") / "assets" / relative_path
-            asset_output_dir = knowledge_dir / asset_relative_dir
-            asset_public_prefix = "/" + asset_relative_dir.as_posix()
+            effective_asset_output_dir = asset_output_dir or knowledge_dir / asset_relative_dir
+            effective_asset_public_prefix = asset_public_prefix or "/" + asset_relative_dir.as_posix()
             cleaned = self.multimodal_cleaner.clean(
                 source_path=source_path,
                 title=self._resolve_title(source_path=source_path, metadata=metadata),
-                asset_output_dir=asset_output_dir,
-                asset_public_prefix=asset_public_prefix,
+                asset_output_dir=effective_asset_output_dir,
+                asset_public_prefix=effective_asset_public_prefix,
                 progress_callback=lambda payload: progress_callback({
                     **payload,
                     "path": relative_path.as_posix(),
@@ -419,8 +454,8 @@ class FrontmatterBootstrapService:
             extra_metadata = cleaned.metadata
             embedded_assets = self._extract_embedded_assets(
                 source_path=source_path,
-                output_dir=asset_output_dir,
-                public_prefix=asset_public_prefix,
+                output_dir=effective_asset_output_dir,
+                public_prefix=effective_asset_public_prefix,
             )
             if embedded_assets:
                 extra_metadata["embedded_assets"] = embedded_assets

@@ -164,7 +164,7 @@ function normalizeEditorAssetDirectory(value: string | undefined): string {
 }
 
 type FileConflictStrategy = 'overwrite' | 'skip' | 'rename'
-type FileConflictDialogOwner = 'tree' | 'resources'
+type FileConflictDialogOwner = 'tree' | 'resources' | 'scanner'
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown'])
 const CODE_EXTENSIONS = new Set([
@@ -2921,6 +2921,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     treeLoading,
     fileClipboard,
     conflictDialog,
+    promptConflictStrategy,
     refreshing,
     ingestionProgress,
     ingestionProgressDetail,
