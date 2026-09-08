@@ -24,14 +24,14 @@ const IMAGE_EXTENSIONS = new Set(['gif', 'jpeg', 'jpg', 'png', 'svg', 'webp'])
 const VIDEO_EXTENSIONS = new Set(['m4v', 'mov', 'mp4', 'ogg', 'ogv', 'webm'])
 
 const option = (mode: EditorWorkspaceMode, label: string, icon: string): EditorModeOption => ({ mode, label, icon })
-const EDIT = option('edit', 'Edit', 'edit')
-const PREVIEW = option('preview', 'Preview', 'visibility')
-const SPLIT = option('split', 'Split', 'view-column')
-const TEXT = option('text', 'Text', 'document')
-const FORMS = option('forms', 'Forms', 'table-chart')
+const EDIT = option('edit', '编辑', 'edit')
+const PREVIEW = option('preview', '预览', 'visibility')
+const SPLIT = option('split', '分栏', 'view-column')
+const TEXT = option('text', '文本', 'document')
+const FORMS = option('forms', '表格', 'table-chart')
 const MARKDOWN = option('markdown', 'Markdown', 'edit-note')
-const CODE = option('code', 'Code', 'code')
-const BINARY = option('binary', 'Binary', 'file')
+const CODE = option('code', '代码', 'code')
+const BINARY = option('binary', '二进制', 'file')
 
 export function extensionOfEditorPath(path: string): string {
   const name = path.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''

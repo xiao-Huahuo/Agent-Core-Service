@@ -96,7 +96,6 @@ const knowledgeActive = computed(() => (
   || props.vaultActive
   || props.formsActive
   || props.literatureActive
-  || props.scannerActive
 ))
 const entertainmentActive = computed(() => props.visualizationActive || props.agentQueueActive)
 const mineActive = computed(() => props.favoritesActive || props.privacyActive || props.feedbackOpen)
@@ -342,18 +341,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeActivityM
             <IcIcon class="library-entry-icon library-color-literature" name="document" :size="18" />
             <span class="activity-label">文献阅读</span>
           </button>
-          <button
-            class="activity-button"
-            :class="{ active: scannerActive }"
-            type="button"
-            title="扫描器"
-            aria-label="扫描器"
-            @mousedown.prevent="handleRipple"
-            @click="emit('openScanner'); closeActivityMenu()"
-          >
-            <IcIcon class="library-entry-icon" name="document" :size="18" />
-            <span class="activity-label">扫描器</span>
-          </button>
         </div>
       </Transition>
     </div>
@@ -368,6 +355,18 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeActivityM
     >
       <img :src="agentIconSrc" class="activity-agent-icon" alt="" />
       <span class="activity-label">Agent</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: scannerActive }"
+      type="button"
+      title="扫描器"
+      aria-label="扫描器"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openScanner')"
+    >
+      <IcIcon name="center-focus" :size="18" />
+      <span class="activity-label">扫描器</span>
     </button>
     <button
       class="activity-button"

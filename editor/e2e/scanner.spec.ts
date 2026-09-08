@@ -51,9 +51,8 @@ async function mockScannerWorkspace(page: Page): Promise<void> {
   })))
 }
 
-/** Open scanner through the real grouped activity navigation. */
+/** Open scanner through its real top-level activity entry below Agent. */
 async function openScanner(page: Page): Promise<void> {
-  await page.getByRole('button', { name: '库', exact: true }).click()
   await page.getByRole('button', { name: '扫描器', exact: true }).click()
   await expect(page.locator('.scanner-view')).toBeVisible()
 }
@@ -71,8 +70,13 @@ test('scanner upload, result editing, examples, and responsive layouts', async (
   await page.goto('/')
   await openScanner(page)
 
-  await expect(page.locator('.scanner-example')).toHaveCount(7)
-  await expect(page.getByRole('button', { name: /上传文件/u })).toBeVisible()
+  await expect(page.locator('.scanner-rail-titlebar')).toContainText('扫描器')
+  await expect(page.locator('.scanner-example').first()).toBeVisible()
+  expect(await page.locator('.scanner-example').count()).toBeLessThanOrEqual(3)
+  await expect(page.getByRole('button', { name: '上传文件', exact: true })).toBeVisible()
+  const surfaceChooserPromise = page.waitForEvent('filechooser')
+  await page.locator('.scanner-drop-zone').click({ position: { x: 120, y: 120 } })
+  await (await surfaceChooserPromise).setFiles([])
   const uploadGeometry = await page.locator('.scanner-drop-zone').evaluate((zone) => {
     const button = zone.querySelector('button:not(.scanner-settings)')?.getBoundingClientRect()
     const logo = zone.querySelector('.scanner-logo')?.getBoundingClientRect()
@@ -82,11 +86,36 @@ test('scanner upload, result editing, examples, and responsive layouts', async (
   expect(uploadGeometry.button, JSON.stringify(uploadGeometry)).toBeTruthy()
   expect(uploadGeometry.button?.[0], JSON.stringify(uploadGeometry)).toBeGreaterThanOrEqual(0)
   expect(uploadGeometry.button?.[0], JSON.stringify(uploadGeometry)).toBeLessThan(1024)
-  await expect(page.getByRole('button', { name: /上传文件/u })).toBeInViewport()
+  await expect(page.getByRole('button', { name: '上传文件', exact: true })).toBeInViewport()
   await expect(page.locator('.scanner-logo')).toBeInViewport()
+  const baseBorder = await page.locator('.scanner-example').first().evaluate((element) => getComputedStyle(element).borderColor)
   await page.locator('.scanner-example').first().hover()
-  const transform = await page.locator('.scanner-example-image img').first().evaluate((element) => getComputedStyle(element).transform)
-  expect(transform).not.toBe('none')
+  const hoverStyle = await page.locator('.scanner-example').first().evaluate((element) => ({
+    borderColor: getComputedStyle(element).borderColor,
+    boxShadow: getComputedStyle(element).boxShadow,
+    imageLayer: getComputedStyle(element.querySelector('.scanner-example-image')!).zIndex,
+    copyLayer: getComputedStyle(element.querySelector('.scanner-example-copy')!).zIndex,
+  }))
+  expect(hoverStyle.borderColor).not.toBe(baseBorder)
+  expect(hoverStyle.boxShadow).not.toBe('none')
+  expect(Number(hoverStyle.copyLayer)).toBeGreaterThan(Number(hoverStyle.imageLayer))
+  const firstPage = await page.locator('.scanner-example-copy strong').allTextContents()
+  await page.waitForTimeout(3_800)
+  const secondPage = await page.locator('.scanner-example-copy strong').allTextContents()
+  expect(secondPage).not.toEqual(firstPage)
+  const uploadOverflow = await page.locator('.scanner-start').evaluate((element) => element.scrollHeight - element.clientHeight)
+  expect(uploadOverflow).toBeLessThanOrEqual(1)
+  await page.getByRole('button', { name: '网页链接', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '解析网页链接' })).toBeVisible()
+  expect(await page.locator('.scanner-url-dialog').evaluate((element) => getComputedStyle(element).borderTopWidth)).toBe('4px')
+  await page.screenshot({ path: `${screenshotDirectory}/url-form-1024.png`, fullPage: true })
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  if (await page.locator('.scanner-history-rail').evaluate((element) => element.classList.contains('open'))) {
+    await page.getByRole('button', { name: '收起侧边栏' }).click()
+  }
+  await expect(page.getByRole('button', { name: '展开侧边栏' })).toBeVisible()
+  await page.getByRole('button', { name: '展开侧边栏' }).click()
+  await page.waitForTimeout(250)
   await expectNoScannerOverflow(page)
   await page.screenshot({ path: `${screenshotDirectory}/idle-1024.png`, fullPage: true })
   await page.getByRole('button', { name: '切换为浅色主题' }).click()
@@ -95,7 +124,9 @@ test('scanner upload, result editing, examples, and responsive layouts', async (
 
   for (const viewport of [{ name: '768', width: 768, height: 820 }, { name: '480', width: 480, height: 820 }]) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
-    await page.locator('.scanner-start').evaluate((element) => element.scrollTo(0, 0))
+    if (await page.locator('.scanner-history-rail').evaluate((element) => element.classList.contains('open'))) {
+      await page.getByRole('button', { name: '收起侧边栏' }).click()
+    }
     const mobileLogo = await page.locator('.scanner-logo').boundingBox()
     const mobileZone = await page.locator('.scanner-drop-zone').boundingBox()
     const mobileMain = await page.locator('.scanner-main').boundingBox()
@@ -104,24 +135,69 @@ test('scanner upload, result editing, examples, and responsive layouts', async (
     expect(mobileZone?.y, JSON.stringify({ mobileZone, mobileMain })).toBeGreaterThanOrEqual(mobileMain?.y ?? 0)
     expect((mobileLogo?.y ?? 0) + (mobileLogo?.height ?? 0), JSON.stringify(mobileLogo)).toBeLessThanOrEqual(viewport.height)
     await expect(page.locator('.scanner-logo')).toBeInViewport()
+    expect(await page.locator('.scanner-start').evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1)
     await expectNoScannerOverflow(page)
     await page.screenshot({ path: `${screenshotDirectory}/idle-${viewport.name}.png`, fullPage: true })
   }
 
   await page.setViewportSize({ width: 1024, height: 820 })
   const chooserPromise = page.waitForEvent('filechooser')
+  if (await page.getByRole('button', { name: '展开侧边栏' }).isVisible()) await page.getByRole('button', { name: '展开侧边栏' }).click()
   await page.getByRole('button', { name: '上传解析', exact: true }).click()
   const chooser = await chooserPromise
   await chooser.setFiles({ name: '课堂笔记.txt', mimeType: 'text/plain', buffer: Buffer.from('课堂原始内容') })
   await expect(page.locator('.scanner-running')).toBeVisible()
   await expect(page.locator('.scanner-history-card .scanner-history-status')).toHaveText('解析中')
+  expect(await page.locator('.scanner-history-card').evaluate((element) => getComputedStyle(element).animationName)).toContain('scanner-history-enter')
   await page.screenshot({ path: `${screenshotDirectory}/running-1024.png`, fullPage: true })
   await expect(page.locator('.scanner-result')).toBeVisible({ timeout: 8_000 })
-  await expect(page.locator('.scanner-source-pane')).toContainText('原文件')
+  await expect(page.locator('.scanner-source-pane .editor-pane-toolbar')).toBeVisible()
+  await expect(page.locator('.scanner-markdown-pane .editor-pane-toolbar')).toBeVisible()
+  await expect(page.locator('.scanner-source-pane .editor-mode-switch')).toBeVisible()
+  await expect(page.locator('.scanner-markdown-pane .editor-mode-switch')).toBeVisible()
   await expect(page.getByRole('button', { name: 'OCR', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'No OCR', exact: true })).toBeVisible()
-  await expectNoScannerOverflow(page)
+  if (!await page.locator('.scanner-history-rail').evaluate((element) => element.classList.contains('open'))) {
+    await page.getByRole('button', { name: '展开侧边栏' }).click()
+  }
+  const uploadButtonBox = await page.getByRole('button', { name: '上传解析', exact: true }).boundingBox()
+  const historyCardBox = await page.locator('.scanner-history-card').boundingBox()
+  expect(
+    Math.abs((uploadButtonBox?.width ?? 0) - (historyCardBox?.width ?? 0)),
+    JSON.stringify({ uploadButtonBox, historyCardBox }),
+  ).toBeLessThanOrEqual(1)
+  await page.getByRole('button', { name: 'No OCR', exact: true }).hover()
+  await page.waitForTimeout(220)
+  const ocrHover = await page.getByRole('button', { name: 'No OCR', exact: true }).evaluate((element) => ({
+    background: getComputedStyle(element).backgroundColor,
+    shadow: getComputedStyle(element).boxShadow,
+  }))
+  expect(ocrHover.background).toBe('rgba(0, 0, 0, 0)')
+  expect(ocrHover.shadow).toBe('none')
   await page.screenshot({ path: `${screenshotDirectory}/result-1024.png`, fullPage: true })
+  const sourceWidthBefore = (await page.locator('.scanner-source-pane').boundingBox())?.width ?? 0
+  const divider = await page.locator('.scanner-pane-divider').boundingBox()
+  expect(divider).toBeTruthy()
+  await page.mouse.move((divider?.x ?? 0) + 3, (divider?.y ?? 0) + 120)
+  await page.mouse.down()
+  await page.mouse.move((divider?.x ?? 0) + 83, (divider?.y ?? 0) + 120)
+  await page.mouse.up()
+  const sourceWidthAfter = (await page.locator('.scanner-source-pane').boundingBox())?.width ?? 0
+  expect(sourceWidthAfter).toBeGreaterThan(sourceWidthBefore + 50)
+  const movedDivider = await page.locator('.scanner-pane-divider').boundingBox()
+  await page.mouse.move((movedDivider?.x ?? 0) + 3, (movedDivider?.y ?? 0) + 120)
+  await page.mouse.down()
+  await page.mouse.move((divider?.x ?? 0) + 3, (divider?.y ?? 0) + 120)
+  await page.mouse.up()
+  await page.getByRole('button', { name: '收起侧边栏' }).click()
+  const expandButtonBox = await page.getByRole('button', { name: '展开侧边栏' }).boundingBox()
+  const backButtonBox = await page.getByRole('button', { name: '返回上传页' }).boundingBox()
+  expect(
+    Math.abs((expandButtonBox?.y ?? 0) - (backButtonBox?.y ?? 0)),
+    JSON.stringify({ expandButtonBox, backButtonBox }),
+  ).toBeLessThanOrEqual(1)
+  await page.getByRole('button', { name: '展开侧边栏' }).click()
+  await expectNoScannerOverflow(page)
 
   await page.getByRole('button', { name: 'No OCR', exact: true }).click()
   await expect(page.locator('.scanner-markdown-pane textarea').first()).toHaveValue(/No OCR/u)
@@ -136,7 +212,7 @@ test('scanner upload, result editing, examples, and responsive layouts', async (
   await page.getByRole('button', { name: '我的', exact: true }).click()
   await page.getByRole('button', { name: '我的收藏', exact: true }).click()
   await expect(page.locator('.favorites-view')).toBeVisible()
-  await page.getByRole('button', { name: /扫描器/u }).click()
+  await page.getByLabel('收藏分类').getByRole('button', { name: '扫描器', exact: true }).click()
   await expect(page.locator('.scanner-favorites-panel .scanner-history-card')).toHaveCount(1)
   await page.screenshot({ path: `${screenshotDirectory}/favorites-1024.png`, fullPage: true })
 })

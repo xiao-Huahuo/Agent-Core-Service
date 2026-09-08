@@ -63,11 +63,12 @@ watch(() => settingsStore.profile.userId, (userId) => {
 </script>
 
 <template>
-  <div class="scanner-history-list">
-    <template v-for="record in visibleRecords" :key="record.scan_id">
+  <div class="scanner-history-list" :class="{ 'is-empty': visibleRecords.length === 0 }">
+    <template v-for="(record, index) in visibleRecords" :key="record.scan_id">
       <article
         class="scanner-history-card"
         :class="{ active: record.scan_id === activeId }"
+        :style="{ '--history-index': index }"
         role="button"
         tabindex="0"
         @click="emit('select', record)"
@@ -103,7 +104,8 @@ watch(() => settingsStore.profile.userId, (userId) => {
 
 <style scoped>
 .scanner-history-list { display: grid; align-content: start; gap: 8px; min-height: 0; overflow: auto; padding: 4px 8px 16px; }
-.scanner-history-card { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 8px; width: 100%; min-width: 0; padding: 9px; border: 1px solid var(--color-border); border-radius: 17px; outline: 0; background: var(--color-canvas); color: var(--color-text); font: inherit; text-align: left; cursor: pointer; transition: border-color 180ms ease, background 180ms ease, transform 140ms ease; }
+.scanner-history-list.is-empty { place-items: center; align-content: center; }
+.scanner-history-card { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 8px; width: 100%; min-width: 0; padding: 9px; border: 1px solid var(--color-border); border-radius: var(--workspace-card-radius); outline: 0; background: var(--color-canvas); color: var(--color-text); font: inherit; text-align: left; cursor: pointer; animation: scanner-history-enter 240ms cubic-bezier(.23,1,.32,1) both; animation-delay: calc(var(--history-index) * 55ms); transition: border-color 180ms ease, background 180ms ease, transform 140ms ease; }
 .scanner-history-card:hover { border-color: var(--color-border-strong); background: var(--color-bg-hover); }
 .scanner-history-card:active { transform: scale(.985); }
 .scanner-history-card.active { border-color: var(--color-primary); background: var(--color-primary-soft); }
@@ -121,7 +123,8 @@ watch(() => settingsStore.profile.userId, (userId) => {
 .scanner-history-actions button:active:not(:disabled) { transform: scale(.9); }
 .scanner-history-actions .is-favorite { color: var(--color-primary); fill: currentColor; }
 .scanner-history-actions button:disabled { opacity: .35; }
-.scanner-history-empty { margin: 32px 12px; color: var(--color-text-muted); font-size: calc(12px * var(--font-scale)); text-align: center; }
+.scanner-history-empty { margin: 0; color: var(--color-text-muted); font-size: calc(12px * var(--font-scale)); text-align: center; }
+@keyframes scanner-history-enter { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes scanner-ring { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .scanner-history-card,.scanner-history-actions button { transition: none; } .scanner-file-icon.running::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .scanner-history-card { animation: none; } .scanner-history-card,.scanner-history-actions button { transition: none; } .scanner-file-icon.running::after { animation: none; } }
 </style>

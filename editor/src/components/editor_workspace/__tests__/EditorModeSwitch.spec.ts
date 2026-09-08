@@ -21,10 +21,10 @@ describe('EditorModeSwitch', () => {
     expect(wrapper.emitted('update:modelValue')).toEqual([['forms']])
   })
 
-  it('keeps Edit Preview Split as the default contract for search preview', () => {
+  it('keeps the localized edit, preview, and split contract for search preview', () => {
     const wrapper = mount(EditorModeSwitch, { props: { modelValue: 'edit' } })
 
-    expect(wrapper.findAll('button').map((button) => button.text())).toEqual(['Edit', 'Preview', 'Split'])
+    expect(wrapper.findAll('button').map((button) => button.text())).toEqual(['编辑', '预览', '分栏'])
   })
 
   it('renders a real registered SVG for every modality mode icon', () => {

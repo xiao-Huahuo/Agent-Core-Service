@@ -30,9 +30,9 @@ const emit = defineEmits<{
 
 /** Stable mode definitions shared by the formal editor and readonly preview. */
 const defaultModeButtons: Array<{ mode: EditorWorkspaceMode; label: string; icon: string }> = [
-  { mode: 'edit', label: 'Edit', icon: 'edit' },
-  { mode: 'preview', label: 'Preview', icon: 'visibility' },
-  { mode: 'split', label: 'Split', icon: 'view-column' },
+  { mode: 'edit', label: '编辑', icon: 'edit' },
+  { mode: 'preview', label: '预览', icon: 'visibility' },
+  { mode: 'split', label: '分栏', icon: 'view-column' },
 ]
 const modeButtons = computed(() => props.options ?? defaultModeButtons)
 const switchStyle = computed(() => ({

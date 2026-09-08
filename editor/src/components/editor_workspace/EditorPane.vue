@@ -14,7 +14,7 @@ import EditorSidebarCloseButton from '@/components/editor_workspace/EditorSideba
 import BacklinksPanel from '@/components/editor_workspace/BacklinksPanel.vue'
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
-import EditorModeSwitch from '@/components/editor_workspace/EditorModeSwitch.vue'
+import EditorPaneToolbar from '@/components/editor_workspace/EditorPaneToolbar.vue'
 import MarkdownHtmlVisualizationPanel from '@/components/editor_workspace/MarkdownHtmlVisualizationPanel.vue'
 import MarkdownOutline from '@/components/editor_workspace/MarkdownOutline.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
@@ -576,29 +576,22 @@ onErrorCaptured((err, vm, info) => {
 
 <template>
   <main class="editor-panel surface-panel" :class="{ 'sidebar-editor-panel': props.sidebar }" @keydown.capture="handleEditorShortcut">
-    <div class="tab-strip">
-      <div class="tab-list">
-        <button
-          v-if="workspaceStore.activeTab"
-          :key="workspaceStore.activeTab.path"
-          class="tab-item"
-          type="button"
-          @click="workspaceStore.activateTab(workspaceStore.activeTab.path)"
-        >
-          <span class="tab-title">{{ workspaceStore.activeTab.title }}</span>
-          <i v-if="workspaceStore.activeTab.dirty" class="dirty-dot"></i>
-          <IcIcon name="close" class="tab-close" :size="13" @click.stop="workspaceStore.closeTab(workspaceStore.activeTab.path)" />
-        </button>
-      </div>
-
-      <div class="tab-actions">
-        <EditorModeSwitch
-          class="editor-mode-control"
-          :class="{ 'single-mode': activePipeline.modes.length === 1 }"
-          :model-value="effectiveEditorMode"
-          :options="activePipeline.modes"
-          @update:model-value="setEditorMode"
-        />
+    <EditorPaneToolbar
+      v-if="workspaceStore.activeTab"
+      :key="workspaceStore.activeTab.path"
+      :title="workspaceStore.activeTab.title"
+      :dirty="workspaceStore.activeTab.dirty"
+      :model-value="effectiveEditorMode"
+      :options="activePipeline.modes"
+      closable
+      save-label="保存"
+      :save-disabled="workspaceStore.activeFileReadonly"
+      @activate="workspaceStore.activateTab(workspaceStore.activeTab.path)"
+      @close="workspaceStore.closeTab(workspaceStore.activeTab.path)"
+      @save="saveActiveFileAndRefreshBacklinks"
+      @update:model-value="setEditorMode"
+    >
+      <template #actions>
         <button
           v-if="isMarkdownViewer"
           class="editor-tool-button outline-toggle"
@@ -652,33 +645,9 @@ onErrorCaptured((err, vm, info) => {
             </button>
           </div>
         </div>
-        <button
-          class="editor-tool-button save-button"
-          type="button"
-          :disabled="workspaceStore.activeFileReadonly"
-          @click="saveActiveFileAndRefreshBacklinks"
-        >
-          <svg
-            class="save-motion-icon"
-            aria-hidden="true"
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path data-save-path="box" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
-            <path data-save-path="top" d="M7 3v5h8" />
-            <path data-save-path="bottom" d="M17 20v-7H7v7" />
-          </svg>
-          <span>Save</span>
-        </button>
         <EditorSidebarCloseButton v-if="props.sidebar" @close="emit('close')" />
-      </div>
-    </div>
+      </template>
+    </EditorPaneToolbar>
 
     <div
       v-if="workspaceStore.openTabs.length > 0"
@@ -781,83 +750,6 @@ onErrorCaptured((err, vm, info) => {
   min-width: 0;
 }
 
-.tab-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
-  min-height: 34px;
-  padding: var(--space-8) var(--space-10) 0;
-  background: var(--color-canvas-soft);
-}
-
-.tab-list {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  overflow-x: hidden;
-  overflow-y: hidden;
-}
-
-.tab-item {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 8px 16px;
-  align-items: center;
-  gap: var(--space-6);
-  min-width: 0;
-  width: min(260px, 45vw);
-  max-width: min(260px, 45vw);
-  height: 28px;
-  padding: 0 var(--space-10);
-  border: 0;
-  border-radius: 999px;
-  background: var(--color-tab-active);
-  color: var(--color-text);
-  font-size: calc(12px * var(--font-scale));
-  text-align: left;
-  flex: 0 1 min(260px, 45vw);
-}
-
-.tab-title {
-  justify-self: start;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dirty-dot {
-  grid-column: 2;
-  justify-self: center;
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-accent);
-}
-
-.tab-close {
-  grid-column: 3;
-  justify-self: end;
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-}
-
-.tab-close:hover {
-  color: var(--color-text);
-}
-
-.tab-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  flex-shrink: 0;
-  padding-bottom: var(--space-6);
-}
-
 .editor-tool-button {
   display: inline-flex;
   align-items: center;
@@ -885,13 +777,6 @@ onErrorCaptured((err, vm, info) => {
 .outline-toggle.active {
   background: var(--color-primary-soft);
   color: var(--color-primary);
-}
-
-.save-motion-icon,
-.save-motion-icon path {
-  overflow: visible;
-  transform-origin: center;
-  transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .visualize-menu {
@@ -1008,45 +893,12 @@ onErrorCaptured((err, vm, info) => {
   color: white;
 }
 
-.save-button {
-  --save-tilt: -9deg;
-}
-
-.save-button:active:not(:disabled) .save-motion-icon {
-  transform: rotate(-12deg) scale(0.82);
-}
-
-.save-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.save-button:disabled:hover {
-  background: transparent;
-  color: var(--color-text-muted);
-}
-
 @media (hover: hover) and (pointer: fine) {
   .editor-tool-button:hover:not(:disabled) {
     background: var(--color-primary-softer);
     color: var(--color-primary-hover);
   }
 
-  .save-button:hover:not(:disabled) .save-motion-icon {
-    transform: rotate(var(--save-tilt)) scale(1.1);
-  }
-
-  .save-button:hover:not(:disabled) [data-save-path='box'] {
-    transform: translateY(1px) scale(1.04);
-  }
-
-  .save-button:hover:not(:disabled) [data-save-path='top'] {
-    transform: translate(1.5px, 1.5px) scaleX(0.9);
-  }
-
-  .save-button:hover:not(:disabled) [data-save-path='bottom'] {
-    transform: translateY(-2px) scaleY(0.9);
-  }
 }
 
 .editor-body {
@@ -1133,16 +985,6 @@ onErrorCaptured((err, vm, info) => {
 }
 
 @media (max-width: 920px) {
-  .tab-strip {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .tab-actions {
-    width: 100%;
-    overflow: hidden;
-  }
-
   .visualize-trigger span,
   .save-button span,
   .outline-toggle span {
@@ -1161,15 +1003,11 @@ onErrorCaptured((err, vm, info) => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .editor-tool-button,
-  .save-motion-icon,
-  .save-motion-icon path {
+  .editor-tool-button {
     transition: color 160ms ease, background 160ms ease;
   }
 
-  .editor-tool-button:active:not(:disabled),
-  .save-button:hover:not(:disabled) .save-motion-icon,
-  .save-button:hover:not(:disabled) [data-save-path] {
+  .editor-tool-button:active:not(:disabled) {
     transform: none;
   }
 }
